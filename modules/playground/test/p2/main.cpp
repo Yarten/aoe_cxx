@@ -5,6 +5,7 @@
 #include <iostream>
 #include <coroutine>
 
+
 struct MyWaitable
 {
     int n = 0;
@@ -66,6 +67,16 @@ struct MyPromise
     {
         std::cout << "unhandled exception" << std::endl;
     }
+
+    MyPromise()
+    {
+        std::cout << "MyPromise() " << this << std::endl;
+    }
+
+    ~MyPromise()
+    {
+        std::cout << "~MyPromise()" << this << std::endl;
+    }
 };
 
 MyCoroutine DoSomehing(int n)
@@ -73,6 +84,7 @@ MyCoroutine DoSomehing(int n)
     std::cout << n << std::endl;
     int m = co_await MyWaitable();
     std::cout << "co_await " << m << std::endl;
+
     co_return;
 }
 
