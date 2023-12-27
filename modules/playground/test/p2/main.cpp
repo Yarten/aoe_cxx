@@ -24,8 +24,31 @@ struct MyWaitable
     int await_resume() noexcept
     {
         std::cout << "await resume " << n << std::endl;
+
+        if (c)
+            c.resume();
+
         return 1;
     }
+
+    MyWaitable(int _n)
+        : n(_n)
+    {
+        std::cout << "MyWaitable() " << n << std::endl;
+    }
+
+    ~MyWaitable()
+    {
+        std::cout << "~MyWaitable() " << n << std::endl;
+    }
+
+    MyWaitable(int _n, std::coroutine_handle<> _c)
+        : n(_n), c(_c)
+    {
+        std::cout << "MyWaitable() _c " << n << std::endl;
+    }
+
+    std::coroutine_handle<> c;
 };
 
 struct MyPromise;
@@ -34,12 +57,24 @@ struct MyCoroutine :
     std::coroutine_handle<MyPromise>
 {
     using promise_type = MyPromise;
+
+    MyCoroutine(std::coroutine_handle<MyPromise> && base)
+        : std::coroutine_handle<MyPromise>(base)
+    {
+        std::cout << "MyCoroutine()" << std::endl;
+    }
+
+    ~MyCoroutine()
+    {
+        std::cout << "~MyCoroutine()" << std::endl;
+    }
 };
 
 struct MyPromise
 {
     MyCoroutine get_return_object()
     {
+        // MyPromise 先于 MyCorountine 构造，并早于 MyCoroutine 析构。MyCoroutine 的 destroy() 可以删除本对象
         std::cout << "get return object" << std::endl;
 
         // from_promise() 返回了 std::corouting_handle<>
@@ -77,22 +112,34 @@ struct MyPromise
     {
         std::cout << "~MyPromise()" << this << std::endl;
     }
+
+    MyWaitable await_transform(MyCoroutine c)
+    {
+        return {9, c};
+    }
+
+    MyWaitable await_transform(MyWaitable && w)
+    {
+        return w;
+    }
 };
 
-MyCoroutine DoSomehing(int n)
+MyCoroutine DoSomething(int n)
 {
     std::cout << n << std::endl;
-    int m = co_await MyWaitable();
+    int m = co_await MyWaitable(n);
     std::cout << "co_await " << m << std::endl;
 
-    co_return;
+
+    co_await DoSomething(n + 1);
+    std::cout << "end of DoSomething() " << n << std::endl;
 }
 
 
 int main()
 {
     std::cout << "main() begin" << std::endl;
-    MyCoroutine h = DoSomehing(1);
+    MyCoroutine h = DoSomething(5);
 
     std::cout << "After create h, before h.resume()" << std::endl;
     h.resume();
@@ -114,7 +161,6 @@ int main()
     {
         std::cout << "auto destory()" << std::endl;
     }
-
 
     return 0;
 }

@@ -3,3 +3,4 @@ aoe_add_executable_test(p1
 )
 
 aoe_add_executable_test(p2)
+aoe_add_executable_test(p3)

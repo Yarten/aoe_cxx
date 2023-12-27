@@ -14,7 +14,7 @@ aoe_import(https://github.com/cameron314/concurrentqueue v1.0.4
 # -------------------------------------------------------------
 # Define the project
 aoe_project(
-    GIT_ROOT ${CMAKE_CURRENT_LIST_DIR}
+    GIT_ROOT ${CMAKE_CURRENT_LIST_DIR} # FIXME: GIT_ROOT cannot use . ??
     NAME_FROM_GIT
     VERSION_FROM_GIT
     VERSION_NAME_FROM_GIT

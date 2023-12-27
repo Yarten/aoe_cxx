@@ -7,39 +7,33 @@
 #include <vector>
 
 
-template<class T>
-class A;
-
-template<class T>
-class B
+aoe::async::Yield<int> getValue()
 {
-public:
-    void f(A<T> a);
-};
+    for(int i = 0; i < 10; ++i)
+        co_yield i;
+}
 
-template<class T>
-class A
+aoe::async::Go<double> doSomethingForValue()
 {
-public:
-    void g() {}
-};
+    co_return 3.0;
+}
 
-template<class T>
-void B<T>::f(A<T> a)
+aoe::async::Go<> printValue()
 {
-    a.g();
+    auto h = getValue();
+
+    for (int n = 0; co_await(h >> n);)
+    {
+        std::cout << n << std::endl;
+    }
+
+    std::cout << "final " << (co_await doSomethingForValue()) << std::endl;
 }
 
 
 int main()
 {
-    for(int i : std::vector<int>(3, 1))
-    {
-        std::cout << i << std::endl;
-    }
-
-    B<int> a;
-    a.f(A<int>());
+    printValue();
 
     return 0;
 }
