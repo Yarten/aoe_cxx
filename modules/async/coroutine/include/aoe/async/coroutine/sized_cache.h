@@ -35,7 +35,7 @@ namespace aoe::async::coroutine
         SizedCache(SizedCache &&) noexcept = default;
         SizedCache & operator=(SizedCache &&) noexcept = default;
 
-        SizedCache(std::size_t block_size, std::size_t depth)
+        SizedCache(const std::size_t block_size, const std::size_t depth)
             : block_size_(block_size), depth_(depth)
         {
             if (block_size_ == 0 or depth_ == 0)
@@ -53,7 +53,7 @@ namespace aoe::async::coroutine
 
             if (mem_ptr_ == nullptr)
             {
-                tree_size_ = cache_size_ = mem_size_ = 0;
+                block_size_ = depth_ = tree_size_ = cache_block_count_ = cache_size_ = mem_size_ = 0;
                 throw std::bad_alloc();
             }
 
@@ -125,7 +125,7 @@ namespace aoe::async::coroutine
                 if (node.used.compare_exchange_strong(
                     is_used, true, std::memory_order::acquire, std::memory_order::relaxed))
                 {
-                    auto * mem_ptr = static_cast<void *>(node.mem);
+                    auto * mem_ptr = static_cast<void*>(node.mem);
                     creator(mem_ptr);
                     return static_cast<T*>(mem_ptr);
                 }
@@ -153,7 +153,7 @@ namespace aoe::async::coroutine
             if (deleter)
                 deleter(*ptr);
 
-            auto * void_ptr = static_cast<void *>(ptr);
+            auto * void_ptr = static_cast<void*>(ptr);
             release(void_ptr);
             ptr = nullptr;
         }
@@ -214,7 +214,7 @@ namespace aoe::async::coroutine
                 if (node->used.compare_exchange_strong(is_used, false, std::memory_order::relaxed))
                 {
                     if (deleter)
-                        deleter(*static_cast<T*>(static_cast<void *>(&(node->mem))));
+                        deleter(*static_cast<T*>(static_cast<void*>(&(node->mem))));
                 }
             }
         }
