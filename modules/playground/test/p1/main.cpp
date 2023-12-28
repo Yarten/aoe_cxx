@@ -27,6 +27,9 @@ public:
 
         for (size_t idx = 0; idx < n_; ++idx)
             ptr_[idx] = static_cast<int>(idx);
+
+        std::allocator<std::byte> alloc;
+        alloc.deallocate(alloc.allocate(100), 100);
     }
 
     constexpr ~MyVector()
@@ -36,6 +39,9 @@ public:
 
     constexpr size_t size() const
     {
+        if (ptr_ == nullptr)
+            return 0;
+
         size_t sum = ptr_[0];
 
         for (size_t idx = 0; idx < n_; ++idx)
@@ -76,6 +82,8 @@ int main()
     constexpr size_t s = g(262144);
 
     std::cout << s << std::endl;
+
+    std::atomic<int> m;
 
 
     return 0;
