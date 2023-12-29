@@ -10,15 +10,15 @@
 #include <functional>
 
 
-namespace aoe::async::coroutine
+namespace aoe::async::coroutine::cache_details
 {
     /**
-     * \brief Fixed size cache to store coroutine handles.
-     * For efficiency, a cache is allowed to be stored new values by only one thread at a time.
-     * However, there is no such restriction for deleting values.
+     * \brief Allocator that manage fixed size memory to store objects.
+     * For efficiency, a allocator is allowed to allocate new cache nodes by only one thread at a time.
+     * However, there is no such restriction for deallocating existed cache nodes.
      */
-    template<class T>
-    class SizedCache
+    template<class T, template<class> class TAlloc = std::allocator>
+    class SizedAllocator
     {
         struct TreeNode
         {
@@ -30,13 +30,19 @@ namespace aoe::async::coroutine
             std::atomic_bool used = false;
             std::byte mem[sizeof(T)] {};
         };
-    public:
-        SizedCache() noexcept = default;
-        SizedCache(SizedCache &&) noexcept = default;
-        SizedCache & operator=(SizedCache &&) noexcept = default;
 
-        SizedCache(const std::size_t block_size, const std::size_t depth)
-            : block_size_(block_size), depth_(depth)
+        using Alloc = TAlloc<std::byte>;
+    public:
+        SizedAllocator() noexcept = default;
+        SizedAllocator & operator=(SizedAllocator &&) noexcept = delete;
+
+        SizedAllocator(SizedAllocator && other) noexcept
+        {
+            swap(other);
+        }
+
+        SizedAllocator(const std::size_t block_size, const std::size_t depth, Alloc && alloc = Alloc())
+            : alloc_(std::forward<Alloc>(alloc)), block_size_(block_size), depth_(depth)
         {
             if (block_size_ == 0 or depth_ == 0)
                 return;
@@ -48,34 +54,53 @@ namespace aoe::async::coroutine
             const std::size_t tree_mem_size = (tree_size_ + 1) * sizeof(TreeNode);
             mem_size_ = tree_mem_size + cache_size_ * sizeof(CacheNode);
 
-            // [useless 0th tree node | tree structure ... | cache ...]
-            mem_ptr_ = new(std::nothrow) std::byte[mem_size_];
+            try
+            {
 
-            if (mem_ptr_ == nullptr)
+                // [useless 0th tree node | tree structure ... | cache ...]
+                mem_ptr_ = alloc_.allocate(mem_size_);
+            }
+            catch (...)
             {
                 block_size_ = depth_ = tree_size_ = cache_block_count_ = cache_size_ = mem_size_ = 0;
-                throw std::bad_alloc();
+                throw;
             }
 
             tree_ptr_  = new(mem_ptr_) TreeNode[tree_size_ + 1];
             cache_ptr_ = new(mem_ptr_ + tree_mem_size) CacheNode[cache_size_];
         }
 
-        ~SizedCache() noexcept
+        ~SizedAllocator() noexcept
         {
             fastClear();
-            delete[] mem_ptr_;
+            alloc_.deallocate(mem_ptr_, mem_size_);
+        }
+
+        void swap(SizedAllocator & other) noexcept
+        {
+            std::swap(alloc_, other.alloc_);
+
+            std::swap(mem_ptr_, other.mem_ptr_);
+            std::swap(tree_ptr_, other.tree_ptr_);
+            std::swap(cache_ptr_, other.cache_ptr_);
+
+            std::swap(block_size_, other.block_size_);
+            std::swap(depth_, other.depth_);
+
+            std::swap(mem_size_, other.mem_size_);
+            std::swap(tree_size_, other.tree_size_);
+            std::swap(cache_size_, other.cache_size_);
+            std::swap(cache_block_count_, other.cache_block_count_);
         }
 
     public:
         /**
-         * \brief Try to cache an new T object. This function can only be used by one thread.
+         * \brief Try to allocate a new cache node. This function can only be used by one thread.
          *
-         * \param creator Functor that is responsible to use placement new to create T object.
-         *
-         * \return If successful, it returns a pointer to the new object.
+         * \return If successful, it returns a pointer to the memory
+         * that is used to construct T object by placement new.
          */
-        T * tryNew(const std::function<void(void * mem_ptr)> & creator)
+        void * tryAllocate()
         {
             if (tree_ptr_ == nullptr)
                 return nullptr;
@@ -120,14 +145,15 @@ namespace aoe::async::coroutine
             for(std::size_t i = 0; i < block_size_; ++i)
             {
                 CacheNode & node = cache_ptr_[cache_node_idx + i];
-                bool is_used = false;
+                bool expected_not_used = false;
 
                 if (node.used.compare_exchange_strong(
-                    is_used, true, std::memory_order::acquire, std::memory_order::relaxed))
+                    expected_not_used,
+                    true,
+                    std::memory_order::acquire,
+                    std::memory_order::relaxed))
                 {
-                    auto * mem_ptr = static_cast<void*>(node.mem);
-                    creator(mem_ptr);
-                    return static_cast<T*>(mem_ptr);
+                    return static_cast<void*>(node.mem);
                 }
             }
 
@@ -135,33 +161,9 @@ namespace aoe::async::coroutine
         }
 
         /**
-         * \brief Destory a object that is stored by this cache.
-         */
-        void release(
-            T *& ptr,
-            const std::function<void(T & data)> & deleter =
-            [](T & data)
-            {
-                if constexpr (std::is_class_v<T>)
-                    data.~T();
-            }
-        )
-        {
-            if (ptr == nullptr)
-                return;
-
-            if (deleter)
-                deleter(*ptr);
-
-            auto * void_ptr = static_cast<void*>(ptr);
-            release(void_ptr);
-            ptr = nullptr;
-        }
-
-        /**
          * \brief Destory a cache node. Assume that the object is destructed.
          */
-        void release(void *& ptr)
+        void deallocate(void * ptr)
         {
             if (ptr == nullptr)
                 return;
@@ -187,15 +189,13 @@ namespace aoe::async::coroutine
 
                 assert(tree_node_idx != 0 or i + 1 == depth_);
             }
-
-            ptr = nullptr;
         }
 
         /**
          * \brief Non-thread-safe, but fast cache cleanup
          */
         void fastClear(
-            const std::function<void(T & data)> & deleter =
+            const std::function<void(T & data)> & destructor =
             [](T & data)
             {
                 if constexpr (std::is_class_v<T>)
@@ -213,13 +213,34 @@ namespace aoe::async::coroutine
 
                 if (node->used.compare_exchange_strong(is_used, false, std::memory_order::relaxed))
                 {
-                    if (deleter)
-                        deleter(*static_cast<T*>(static_cast<void*>(&(node->mem))));
+                    if (destructor)
+                        destructor(*static_cast<T*>(static_cast<void*>(&(node->mem))));
                 }
             }
         }
 
+        /**
+         * \return The capacity of this fixed size allocator.
+         */
+        std::size_t capacity() const
+        {
+            return cache_size_;
+        }
+
+        /**
+         * \return The current using count of this allocator's memory.
+         */
+        std::size_t count() const
+        {
+            if (tree_ptr_ == nullptr)
+                return 0;
+            else
+                return tree_ptr_[1].count.load(std::memory_order::acquire);
+        }
+
     private:
+        Alloc alloc_;
+
         std::byte * mem_ptr_   = nullptr;
         TreeNode  * tree_ptr_  = nullptr;
         CacheNode * cache_ptr_ = nullptr;

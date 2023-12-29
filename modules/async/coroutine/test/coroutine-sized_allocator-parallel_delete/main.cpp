@@ -6,7 +6,7 @@
 #include <thread>
 #include <concurrentqueue.h>
 #include <list>
-#include <aoe/async/coroutine/sized_cache.h>
+#include <aoe/async/coroutine/cache_details/sized_allocator.h>
 
 
 struct MyClass
@@ -31,7 +31,7 @@ int main()
     moodycamel::ConcurrentQueue<MyClass *> ptrs;
     std::counting_semaphore<> sem(0);
 
-    aoe::async::coroutine::SizedCache<MyClass> cache(10, 5);
+    aoe::async::coroutine::cache_details::SizedAllocator<MyClass> alloc(10, 5);
 
     std::atomic_bool is_last_one_missing = true;
     std::atomic_int dequeue_failure_count = 0;
@@ -57,7 +57,8 @@ int main()
                         if (ptr->n_ == 99999)
                             is_last_one_missing = false;
 
-                        cache.release(ptr);
+                        ptr->~MyClass();
+                        alloc.deallocate(ptr);
                         ++count;
                     }
                     else
@@ -78,17 +79,14 @@ int main()
 
             for(int i = 1; i < 100000; ++i)
             {
-                MyClass * ptr = cache.tryNew(
-                    [i](void * mem_ptr)
-                    {
-                        new(mem_ptr) MyClass(i);
-                    }
-                );
+                void * mem_ptr = alloc.tryAllocate();
 
-                if (ptr == nullptr)
+                if (mem_ptr == nullptr)
                     std::this_thread::sleep_for(std::chrono::microseconds(100));
                 else
                 {
+                    auto * ptr = new(mem_ptr) MyClass(i);
+
                     if (ptrs.enqueue(ptr))
                     {
                         if (ptr->n_ == 99999)
@@ -110,7 +108,7 @@ int main()
         i.join();
 
     std::cout << std::flush;
-    std::cout << "clear cache, should be empty ..." << std::endl;
+    std::cout << "clear alloc, should be empty ..." << std::endl;
 
     std::cout << "last one sent: " << is_last_one_sent << std::endl;
     std::cout << "last one missing: " << is_last_one_missing << std::endl;
@@ -129,7 +127,7 @@ int main()
 
     std::cout << "dequeue failure count: " << dequeue_failure_count.load() << std::endl;
 
-    cache.fastClear();
+    alloc.fastClear();
 
     return 0;
 }
