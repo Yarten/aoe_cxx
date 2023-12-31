@@ -56,7 +56,6 @@ namespace aoe::async::coroutine::cache_details
 
             try
             {
-
                 // [useless 0th tree node | tree structure ... | cache ...]
                 mem_ptr_ = alloc_.allocate(mem_size_);
             }

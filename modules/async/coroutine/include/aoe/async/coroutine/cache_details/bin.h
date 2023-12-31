@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <list>
 #include <memory>
 #include <concurrentqueue.h>
 #include "./sized_allocator.h"

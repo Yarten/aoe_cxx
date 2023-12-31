@@ -13,20 +13,25 @@ namespace aoe::async::coroutine
     class Holder;
 
     template<class TRet>
-    class Holder<void, TRet>
+    class Holder<void, TRet> :
+        public Base::Awaiter<Holder<void, TRet>>
     {
+        // A coroutine that will return finally can be awaited by its father coroutine.
+        // When this coroutine holder's await functions are called,
+        // its fahter coroutine's state will be updated. (available only in Pool)
+        using ThisAsAwaiter = Base::Awaiter<Holder>;
     public:
         using promise_type = Promise<void, TRet>;
         using Handle       = std::coroutine_handle<promise_type>;
 
     public:
         Holder(Handle handle) noexcept
-            : handle_(handle)
+            : ThisAsAwaiter(handle.promise().getFatherHandle()), handle_(handle)
         {
         }
 
         Holder(Holder && other) noexcept
-            : handle_(other.handle_)
+            : ThisAsAwaiter(std::forward<Holder>(other)), handle_(other.handle_)
         {
             other.handle_ = {};
         }
@@ -41,17 +46,25 @@ namespace aoe::async::coroutine
         Holder & operator=(const Holder &) = delete;
         Holder & operator=(Holder &&) = delete;
 
+        Deleter intoDeleter() &&
+        {
+            Deleter r(handle_);
+            handle_ = {};
+            return r;
+        }
+
     public:
         /**
          * \brief Used by the father coroutine, which is the current coroutine, to check that
          * if this coroutine's promise is ready for the next value, and if not, current coroutine is suspended.
          */
-        bool await_ready() const noexcept
+        [[nodiscard]]
+        bool isReady() const noexcept
         {
             return handle_.promise().isReady();
         }
 
-        void await_suspend(std::coroutine_handle<>) noexcept
+        void onSuspend(std::coroutine_handle<>) noexcept
         {
         }
 
@@ -59,7 +72,7 @@ namespace aoe::async::coroutine
          * \brief Resume the father coroutine
          * \return this coroutine's promised value
          */
-        TRet await_resume() noexcept
+        TRet onResume() noexcept
         {
             switchTo(handle_.promise().getFatherHandle());
             return handle_.promise().take();
@@ -100,39 +113,58 @@ namespace aoe::async::coroutine
         Holder & operator=(const Holder &) = delete;
         Holder & operator=(Holder &&) = delete;
 
-    private:
-        struct YieldAwaiter
+        Deleter intoDeleter() &&
         {
-            Holder & self;
-            TYield & result;
+            Deleter r(handle_);
+            handle_ = {};
+            return r;
+        }
 
-            bool await_ready() const
+    private:
+        class YieldAwaiter : public Base::Awaiter<YieldAwaiter>
+        {
+            using Super = Base::Awaiter<YieldAwaiter>;
+        public:
+            [[nodiscard]]
+            bool isReady() const
             {
-                if (self.handle_.promise().isDone())
+                if (self_.handle_.promise().isDone())
                     return true;
 
-                if (not self.handle_.promise().isReady())
-                    self.handle_.resume();
+                if (not self_.handle_.promise().isReady())
+                    self_.handle_.resume();
 
-                return self.handle_.promise().isDone() or self.handle_.promise().isReady();
+                return self_.handle_.promise().isDone() or self_.handle_.promise().isReady();
             }
 
-            void await_suspend(std::coroutine_handle<>) noexcept
+            void onSuspend(std::coroutine_handle<>) noexcept
             {
             }
 
-            bool await_resume() noexcept
+            bool onResume() noexcept
             {
-                switchTo(self.handle_.promise().getFatherHandle());
+                switchTo(self_.handle_.promise().getFatherHandle());
 
-                if (not self.handle_.promise().isDone())
+                if (not self_.handle_.promise().isDone())
                 {
-                    result = self.handle_.promise().take();
+                    result_ = self_.handle_.promise().take();
                     return true;
                 }
 
                 return false;
             }
+
+        private:
+            YieldAwaiter(Holder & self, TYield & result)
+                : Super(self.handle_), self_(self), result_(result)
+            {
+            }
+
+            friend class Holder;
+
+        private:
+            Holder & self_;
+            TYield & result_;
         };
 
     public:

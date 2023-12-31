@@ -265,6 +265,11 @@ namespace aoe::async::coroutine
             return {spare_bins_, config};
         }
 
+        void cleanup()
+        {
+
+        }
+
     private:
         std::shared_ptr<BinQueue<T>> spare_bins_ = std::make_shared<BinQueue<T>>();
     };

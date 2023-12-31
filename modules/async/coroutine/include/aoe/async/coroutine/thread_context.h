@@ -14,7 +14,7 @@ namespace aoe::async::coroutine
 
     /**
      * \brief Called by Pool to initialize the context of this working thread
-     * that is belonged to Pool.
+     * that belongs to Pool.
      */
     void initThisThread(std::shared_ptr<Pool> pool);
 

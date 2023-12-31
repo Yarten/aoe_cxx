@@ -77,6 +77,13 @@ struct MyPromise
         // MyPromise 先于 MyCorountine 构造，并早于 MyCoroutine 析构。MyCoroutine 的 destroy() 可以删除本对象
         std::cout << "get return object" << std::endl;
 
+        std::coroutine_handle<MyPromise> h[5];
+        for(auto & i : h)
+        {
+            i = MyCoroutine::from_promise(*this);
+            std::cout << i.address() << " " << &i.promise() << std::endl;
+        }
+
         // from_promise() 返回了 std::corouting_handle<>
         return {MyCoroutine::from_promise(*this)};
     }

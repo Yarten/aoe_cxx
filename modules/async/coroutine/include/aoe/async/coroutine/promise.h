@@ -8,83 +8,11 @@
 #include <exception>
 #include <optional>
 
-#include "./thread_context.h"
+#include "./base.h"
 
 
 namespace aoe::async::coroutine
 {
-    /**
-     * \brief Define some promises' common behaviors and staticistic data
-     */
-    class PromiseBase
-    {
-        struct InitAwaiter
-        {
-            bool await_ready() const noexcept
-            {
-                return not isCurrentInitPointSuspended();
-            }
-
-            void await_suspend(std::coroutine_handle<>) const noexcept {}
-
-            void await_resume() const noexcept {}
-        };
-    public:
-        /**
-         * \brief Suspend the new coroutine if it is created by Pool.
-         */
-        InitAwaiter initial_suspend() const noexcept
-        {
-            return {};
-        }
-
-        /**
-         * \brief Always suspend the dead coroutine, it is destroyed by its true holder.
-         * Handle.done() will return true in this case.
-         */
-        std::suspend_always final_suspend() const noexcept
-        {
-            return {};
-        }
-
-        /**
-         * \brief The unhandled exception will be rethrown to this coroutine's father corouine,
-         * or cause termination if this coroutine is the root coroutine.
-         */
-        void unhandled_exception() noexcept
-        {
-            exception_ptr_ = std::current_exception();
-        }
-
-    public:
-        std::exception_ptr takeUnhandledExeception() noexcept
-        {
-            return std::move(exception_ptr_); // TODO: 处理异常
-        }
-
-        std::coroutine_handle<> getFatherHandle() const noexcept
-        {
-            return father_handle_;
-        }
-
-    protected:
-        void recordFatherHandleAndSwitchToThis(const std::coroutine_handle<> self) noexcept
-        {
-            // This coroutine executes immediately after it is created,
-            // unless it was created by a Pool,
-            // in which case the context variable will be restored by the Pool.
-            father_handle_ = switchTo(self);
-        }
-
-    private:
-        // The father coroutine that calls this coroutine. When this coroutine yields, its
-        // father coroutine will be executed.
-        std::coroutine_handle<> father_handle_;
-
-        // The execpetion that is thrown during coroutine's execution
-        std::exception_ptr exception_ptr_;
-    };
-
     /**
      * \brief The context of a coroutine.
      */
@@ -92,7 +20,7 @@ namespace aoe::async::coroutine
     class Promise;
 
     template<>
-    class Promise<void, void> : public PromiseBase
+    class Promise<void, void> : public Base
     {
     public:
         auto get_return_object()
@@ -123,7 +51,7 @@ namespace aoe::async::coroutine
     };
 
     template<class TYield>
-    class Promise<TYield, void> : public PromiseBase
+    class Promise<TYield, void> : public Base
     {
     public:
         auto get_return_object()
@@ -169,7 +97,7 @@ namespace aoe::async::coroutine
     };
 
     template<class TRet>
-    class Promise<void, TRet> : public PromiseBase
+    class Promise<void, TRet> : public Base
     {
     public:
         auto get_return_object()

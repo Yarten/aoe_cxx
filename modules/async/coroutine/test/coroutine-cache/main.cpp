@@ -76,7 +76,7 @@ int main()
     for(std::size_t i = 0; i < SIZE; ++i)
         push();
 
-    std::cout << "5. cache in one full bin and cache out two bin, now the cleaning queue has two bin." << std::endl;
+    std::cout << "5. cache in one full bin and cache out two bin, now the cleaning queue has two bins." << std::endl;
 
     for(std::size_t i = 0; i < SIZE; ++i)
         push();

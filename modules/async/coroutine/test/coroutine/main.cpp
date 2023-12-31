@@ -34,6 +34,5 @@ aoe::async::Go<> printValue()
 int main()
 {
     printValue();
-
     return 0;
 }
