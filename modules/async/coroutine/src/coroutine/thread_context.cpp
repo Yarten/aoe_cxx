@@ -56,6 +56,14 @@ namespace aoe::async::coroutine
         return r;
     }
 
+    std::coroutine_handle<> currentHandle() noexcept
+    {
+        if (thctx_ptr != nullptr)
+            return thctx_ptr->running_coroutine;
+
+        return {};
+    }
+
     std::weak_ptr<Pool> currentPool() noexcept
     {
         if (thctx_ptr != nullptr)

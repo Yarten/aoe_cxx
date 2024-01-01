@@ -5,6 +5,7 @@
 #pragma once
 
 #include "./coroutine/holder.h"
+#include "./coroutine/pipe.h"
 
 
 namespace aoe::async

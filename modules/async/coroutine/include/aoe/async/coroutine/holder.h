@@ -64,7 +64,7 @@ namespace aoe::async::coroutine
             return handle_.promise().isReady();
         }
 
-        void onSuspend(std::coroutine_handle<>) noexcept
+        void onSuspend(std::coroutine_handle<Base>) noexcept
         {
         }
 
@@ -74,7 +74,6 @@ namespace aoe::async::coroutine
          */
         TRet onResume() noexcept
         {
-            switchTo(handle_.promise().getFatherHandle());
             return handle_.promise().take();
         }
 
@@ -137,14 +136,12 @@ namespace aoe::async::coroutine
                 return self_.handle_.promise().isDone() or self_.handle_.promise().isReady();
             }
 
-            void onSuspend(std::coroutine_handle<>) noexcept
+            void onSuspend(std::coroutine_handle<Base>) noexcept
             {
             }
 
             bool onResume() noexcept
             {
-                switchTo(self_.handle_.promise().getFatherHandle());
-
                 if (not self_.handle_.promise().isDone())
                 {
                     result_ = self_.handle_.promise().take();
@@ -156,7 +153,7 @@ namespace aoe::async::coroutine
 
         private:
             YieldAwaiter(Holder & self, TYield & result)
-                : Super(self.handle_), self_(self), result_(result)
+                : Super(self.handle_.promise().getFatherHandle()), self_(self), result_(result)
             {
             }
 

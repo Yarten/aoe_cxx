@@ -33,9 +33,37 @@ namespace aoe::async::coroutine
     };
 
     template <class T>
-    concept VoidAwaiter = requires(T& obj)
+    concept VoidAwaiterTrait = requires(T& obj)
     {
         { obj.onResume() } -> std::same_as<void>;
+    };
+
+    enum class State
+    {
+        // The coroutine is not running and is not ready to run.
+        // This state can only be transformed from the Suspending state.
+        Suspended,
+
+        // The coroutine is not running, but is ready to run.
+        // This state is the initial state, and can only be transformed from the Suspended state.
+        Queuing,
+
+        // The coroutine is running on pool, all suspensions have not been performed.
+        // This state can be transformed from all other states except the Suspending state.
+        Running,
+
+        // The coroutine is still running on pool, but some suspensions are in progress.
+        // This state can only be transformed from the Running state.
+        Suspending,
+
+        // The coroutine is resumed by other coroutines while it is suspending on pool.
+        // When the coroutine suspends, it will be resumed immediately.
+        // This state can only be transformed from the Suspending state.
+        SuspendBroken,
+
+        // The coroutine reaches its final point, and is waiting for being destoryed.
+        // This state is the final state, and can only be transformed from the Running state.
+        Ending,
     };
 
     /**
@@ -94,6 +122,8 @@ namespace aoe::async::coroutine
             return &std::coroutine_handle<Base>::from_address(handle.address()).promise();
         }
 
+        friend void awake(std::weak_ptr<Pool> pool, std::coroutine_handle<Base> handle);
+
     protected:
         void recordFatherHandleAndSwitchToThis(const std::coroutine_handle<> self) noexcept
         {
@@ -114,6 +144,9 @@ namespace aoe::async::coroutine
         // The handle to delete this coroutine that is managed by Pool.
         CacheElement<Deleter> cache_deleter_;
 
+        // The execution state of this corotuine.
+        std::atomic<State> state_ = State::Queuing;
+
     private:
         enum class AwaiterType
         {
@@ -125,67 +158,19 @@ namespace aoe::async::coroutine
         /**
          * \brief Called before this coroutine can be resumed by other threads.
          */
-        void suspendFrom(const AwaiterType type) noexcept
-        {
-            if (type == AwaiterType::Init)
-                return;
-
-            const std::chrono::steady_clock::time_point curr_time_point = std::chrono::steady_clock::now();
-            run_time_ += (curr_time_point - last_time_point_);
-            last_time_point_ = curr_time_point;
-
-            is_ready_to_resume_.store(false, std::memory_order::release);
-        }
+        void suspendFrom(AwaiterType type) noexcept;
 
         /**
          * \brief Called after this coroutine can be resumed by other threads.
          */
-        void resumeFrom(const AwaiterType type) noexcept
-        {
-            const std::chrono::steady_clock::time_point curr_time_point = std::chrono::steady_clock::now();
-            const std::chrono::steady_clock::duration interval = curr_time_point - last_time_point_;
-            last_time_point_ = curr_time_point;
-
-            switch (type)
-            {
-            case AwaiterType::Init:
-                init_wait_time_ += interval;
-                break;
-            case AwaiterType::Run:
-                {
-                    // the sync-relation is built by awaiters, in other words, no awaiter can resume this coroutine
-                    // when this coroutine is already awake.
-                    if (is_ready_to_resume_.load(std::memory_order::relaxed))
-                        queue_time_ += interval;
-                    else
-                        wait_time_ += interval;
-                }
-                break;
-            case AwaiterType::Final:
-                break;
-            }
-        }
+        void resumeFrom(AwaiterType type) noexcept;
 
         /**
-         * \brief Called by Pool when some threads resume this coroutine while the Pool
-         * has no idle thread to run the coroutine.
+         * \brief This method is used by Pool to awake this coroutine.
+         * \return True only if this coroutine is awakened from the Suspended state,
+         * in which case it is added to the Pool's run queue.
          */
-        void setReadyToResume() noexcept
-        {
-            bool expected_not_ready_yet = false;
-
-            if (is_ready_to_resume_.compare_exchange_strong(
-                expected_not_ready_yet,
-                true,
-                std::memory_order::acquire,
-                std::memory_order::relaxed
-            ))
-            {
-                const std::chrono::steady_clock::time_point curr_time_point = std::chrono::steady_clock::now();
-                wait_time_ += (curr_time_point - last_time_point_);
-                last_time_point_ = curr_time_point;
-            }
-        }
+        bool setReadyToResume() noexcept;
 
     private:
         std::chrono::steady_clock::time_point last_time_point_ = std::chrono::steady_clock::now();
@@ -194,8 +179,6 @@ namespace aoe::async::coroutine
         std::chrono::steady_clock::duration wait_time_{};
         std::chrono::steady_clock::duration queue_time_{};
         std::chrono::steady_clock::duration run_time_{};
-
-        std::atomic_bool is_ready_to_resume_ = false;
 
     public:
         template <class TDerived, AwaiterType TYPE = AwaiterType::Run>
@@ -219,12 +202,14 @@ namespace aoe::async::coroutine
             }
 
             [[nodiscard]]
-            bool await_ready() const noexcept(noexcept(derived().isReady()))
+            bool await_ready() const
+                noexcept(noexcept(derived().isReady()))
             {
                 return derived().isReady();
             }
 
-            void await_suspend(const std::coroutine_handle<> handle) noexcept(noexcept(derived().onSuspend({})))
+            void await_suspend(const std::coroutine_handle<> handle)
+                noexcept(noexcept(derived().onSuspend({})) and noexcept(await_ready()))
             {
                 if (handle_.address() != nullptr)
                 {
@@ -233,13 +218,20 @@ namespace aoe::async::coroutine
                 }
 
                 // let the derived awaiter resume this coroutine at the right time
-                derived().onSuspend(handle);
+                derived().onSuspend(std::coroutine_handle<Base>::from_address(handle.address()));
+
+                // Ensure that this coroutine is not suddenly ready because of other coroutines,
+                // causing it to hang and never be woken up again.
+                if (handle_.address() != nullptr and await_ready())
+                    handle_.promise().setReadyToResume();
             }
 
             void await_resume()
                 noexcept(noexcept(derived().onResume()))
-                requires(VoidAwaiter<TDerived>)
+                requires(VoidAwaiterTrait<TDerived>)
             {
+                switchTo(handle_);
+
                 // let the derived awaiter ensure that this coroutine will not be resumed again.
                 derived().onResume();
 
@@ -249,8 +241,10 @@ namespace aoe::async::coroutine
 
             auto await_resume()
                 noexcept(noexcept(derived().onResume()))
-                requires(not VoidAwaiter<TDerived>)
+                requires(not VoidAwaiterTrait<TDerived>)
             {
+                switchTo(handle_);
+
                 auto promised = derived().onResume();
 
                 if (handle_.address() != nullptr)
@@ -287,7 +281,7 @@ namespace aoe::async::coroutine
                 return not isCurrentInitPointSuspended();
             }
 
-            void onSuspend(std::coroutine_handle<>) const noexcept
+            void onSuspend(std::coroutine_handle<Base>) const noexcept
             {
             }
 
@@ -307,7 +301,7 @@ namespace aoe::async::coroutine
                 return false;
             }
 
-            void onSuspend(std::coroutine_handle<>) const noexcept
+            void onSuspend(std::coroutine_handle<Base>) const noexcept
             {
             }
 

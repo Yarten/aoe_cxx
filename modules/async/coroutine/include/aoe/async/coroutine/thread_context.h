@@ -32,6 +32,12 @@ namespace aoe::async::coroutine
     std::coroutine_handle<> switchTo(std::coroutine_handle<> next_ch) noexcept;
 
     /**
+     * \return The coroutine that is executing now.
+     * If this thread is not a Pool working thread, it returns null.
+     */
+    std::coroutine_handle<> currentHandle() noexcept;
+
+    /**
      * \brief Called by Pool, to suspend coroutine created by Pool, and schedue it later.
      * If a coroutine is created by user (directly call the coroutine), it will not affect its init point.
      */
