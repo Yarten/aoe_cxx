@@ -91,7 +91,7 @@ namespace aoe::async::coroutine::pipe_details
                 // when the buffer size is zero, it is the case that sender and receiver exchange data directly.
                 // when the sender is suspended to wait for the receiver, we should push the data to avoid that
                 // the receiver is also suspended because of the empty buffer.
-                if (self_.buffer_size_ == 0)
+                if (self_.buffer_size_ == 0 and self_.buffer_.size_approx() != 0)
                     pushData();
 
                 self_.awaiting_send_.store(handle, std::memory_order::release);
@@ -109,6 +109,11 @@ namespace aoe::async::coroutine::pipe_details
 
                 awake(self_.pool_, self_.awaiting_recv_.exchange({}, std::memory_order::acquire));
                 return true;
+            }
+
+            void interruptSuspension()
+            {
+                self_.awaiting_send_.store({}, std::memory_order::release);
             }
 
         private:
