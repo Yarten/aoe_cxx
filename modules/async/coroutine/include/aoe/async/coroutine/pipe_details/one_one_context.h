@@ -70,9 +70,9 @@ namespace aoe::async::coroutine::pipe_details
         std::atomic<std::coroutine_handle<Base>> awaiting_recv_;
 
     public:
-        class SendAwaiter : public Base::Awaiter<SendAwaiter>
+        class SendAwaiter : public BoolAwaiter<SendAwaiter>
         {
-            using Super = Base::Awaiter<SendAwaiter>;
+            using Super = BoolAwaiter<SendAwaiter>;
         public:
             [[nodiscard]]
             bool isReady() const
@@ -111,7 +111,7 @@ namespace aoe::async::coroutine::pipe_details
                 return true;
             }
 
-            void abort()
+            void onAbort()
             {
                 self_.awaiting_send_.store({}, std::memory_order::release);
             }
@@ -134,13 +134,18 @@ namespace aoe::async::coroutine::pipe_details
             {
                 bool status = false;
 
+                constexpr std::size_t INDEX_VALUE = 0;
+                constexpr std::size_t INDEX_REF   = 1;
+                static_assert(std::is_same_v<decltype(std::get<INDEX_VALUE>(data_)), T>);
+                static_assert(std::is_same_v<decltype(std::get<INDEX_REF>(data_)), const T &>);
+
                 switch (data_.index())
                 {
-                case 0:
-                    status = self_.buffer_.enqueue(std::move(std::get<0>(data_)));
+                case INDEX_VALUE:
+                    status = self_.buffer_.enqueue(std::move(std::get<INDEX_VALUE>(data_)));
                     break;
-                case 1:
-                    status = self_.buffer_.enqueue(std::get<1>(data_));
+                case INDEX_REF:
+                    status = self_.buffer_.enqueue(std::get<INDEX_REF>(data_));
                 default:
                     break;
                 }
@@ -151,12 +156,12 @@ namespace aoe::async::coroutine::pipe_details
 
         private:
             OneOneContext & self_;
-            std::variant<T, std::reference_wrapper<T>> data_;
+            std::variant<T, std::reference_wrapper<const T>> data_;
         };
 
-        class RecvAwaiter : public Base::Awaiter<RecvAwaiter>
+        class RecvAwaiter : public BoolAwaiter<RecvAwaiter>
         {
-            using Super = Base::Awaiter<RecvAwaiter>;
+            using Super = BoolAwaiter<RecvAwaiter>;
         public:
             [[nodiscard]]
             bool isReady() const
@@ -179,14 +184,14 @@ namespace aoe::async::coroutine::pipe_details
                 if (self_.send_closed_.load(std::memory_order::acquire))
                     return self_.buffer_.try_dequeue(result_);
 
-                const bool must_have_at_one_value = self_.buffer_.try_dequeue(result_);
-                assert(must_have_at_one_value);
+                const bool must_have_at_least_one_value = self_.buffer_.try_dequeue(result_);
+                assert(must_have_at_least_one_value);
 
                 awake(self_.pool_, self_.awaiting_send_.exchange({}, std::memory_order::acquire));
                 return true;
             }
 
-            void abort()
+            void onAbort()
             {
                 self_.awaiting_recv_.store({}, std::memory_order::release);
             }

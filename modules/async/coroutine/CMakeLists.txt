@@ -1,5 +1,5 @@
 aoe_add_library(coroutine
-    DEPEND ${3rd-concurrentqueue}
+    DEPEND macro ${3rd-concurrentqueue}
 )
 
 aoe_add_executable_test(coroutine)

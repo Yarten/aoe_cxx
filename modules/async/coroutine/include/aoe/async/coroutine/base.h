@@ -8,6 +8,7 @@
 #include <exception>
 #include <chrono>
 
+#include <aoe/macro.h>
 #include "./thread_context.h"
 #include "./cache.h"
 
@@ -202,11 +203,7 @@ namespace aoe::async::coroutine
             }
 
             [[nodiscard]]
-            bool await_ready() const
-                noexcept(noexcept(derived().isReady()))
-            {
-                return derived().isReady();
-            }
+            bool await_ready() const AOE_NOEXCEPT_BODY(derived().isReady())
 
             void await_suspend(const std::coroutine_handle<> handle)
                 noexcept(noexcept(derived().onSuspend({})) and noexcept(await_ready()))
@@ -251,6 +248,18 @@ namespace aoe::async::coroutine
                     handle_.promise().resumeFrom(TYPE);
 
                 return promised;
+            }
+
+            void await_abort()
+                noexcept(noexcept(derived().onAbort()))
+            {
+                switchTo(handle_);
+
+                // let the derived awaiter ensure that this coroutine will not be resumed again.
+                derived().onAbort();
+
+                if (handle_.address() != nullptr)
+                    handle_.promise().resumeFrom(TYPE);
             }
 
         private:
@@ -346,14 +355,6 @@ namespace aoe::async::coroutine
     public:
         using Base::Awaiter<BoolAwaiter>::Awaiter;
 
-        void abort()
-        {
-            derived().onAbort();
-
-            if (false_callback_)
-                false_callback_();
-        }
-
         TDerived && operator&(std::function<void()> true_callback) &&
         {
             true_callback_ = std::move(true_callback);
@@ -370,17 +371,10 @@ namespace aoe::async::coroutine
         friend class Base::Awaiter<BoolAwaiter>;
 
         [[nodiscard]]
-        bool isReady() const
-            noexcept(noexcept(derived().isReady()))
-        {
-            return derived().isReady();
-        }
+        bool isReady() const AOE_NOEXCEPT_BODY(derived().isReady())
 
         void onSuspend(const std::coroutine_handle<Base> handle)
-            noexcept(noexcept(derived().onSuspend({})))
-        {
-            derived().onSuspend(handle);
-        }
+        AOE_NOEXCEPT_BODY(derived().onSuspend(handle))
 
         bool onResume()
         {
@@ -398,6 +392,14 @@ namespace aoe::async::coroutine
             }
 
             return result;
+        }
+
+        void onAbort()
+        {
+            derived().onAbort();
+
+            if (false_callback_)
+                false_callback_();
         }
 
     private:

@@ -10,44 +10,81 @@
 
 namespace aoe::async::coroutine
 {
-    template<class ... TAwaiter>
+    template <class... TAwaiter>
     class Selector : public BoolAwaiter<Selector<TAwaiter...>>
     {
+        using Super = BoolAwaiter<Selector>;
+        using Indexes = std::make_index_sequence<sizeof...(TAwaiter)>;
+
     public:
-        explicit Selector(TAwaiter && ... awaiter)
-            : awaiters_(std::forward<TAwaiter>(awaiter)...)
+        explicit Selector(TAwaiter&&... awaiter)
+            : Super(currentHandle()), awaiters_(std::forward<TAwaiter>(awaiter)...)
         {
         }
 
     public:
         [[nodiscard]]
         bool isReady() const
-            noexcept(noexcept(isReady(std::make_index_sequence<sizeof...(TAwaiter)>())))
-        {
-            return isReady(std::make_index_sequence<sizeof...(TAwaiter)>());
-        }
+        AOE_NOEXCEPT_BODY(
+            isReady(Indexes())
+        )
 
         void onSuspend(std::coroutine_handle<Base> handle)
-        {
+        AOE_NOEXCEPT_BODY(
+            onSuspend(handle, Indexes())
+        )
 
+        bool onResume()
+        {
+            return onResume(Indexes());
+        }
+
+        void onAbort()
+        {
+            onAbort(Indexes());
         }
 
     private:
-        template<std::size_t ... I>
+        template <std::size_t ... I>
         [[nodiscard]] bool isReady(std::index_sequence<I...>) const
-            noexcept(noexcept((... or std::get<I>(awaiters_).isReady())))
+        AOE_NOEXCEPT_BODY(
+            (std::get<I>(awaiters_).isReady() or ...)
+        )
+
+        template <std::size_t ... I>
+        void onSuspend(std::coroutine_handle<Base> handle, std::index_sequence<I...>)
+        AOE_NOEXCEPT_BODY(
+            (std::get<I>(awaiters_).onSuspend(handle), ...)
+        )
+
+        template <std::size_t ... I>
+        bool onResume(std::index_sequence<I...>)
         {
-            return (... or std::get<I>(awaiters_).isReady());
+            bool success = false;
+            bool some_ready = false;
+
+            ([&](auto && i)
+                {
+                    if (some_ready or not i.isReady())
+                        i.await_abort();
+                    else
+                    {
+                        some_ready = true;
+                        success = i.await_resume();
+                    }
+                }
+                (std::get<I>(awaiters_)), ...);
+
+            return success;
         }
 
-        template<std::size_t ... I>
-        void onSuspend(std::coroutine_handle<Base> handle, std::index_sequence<I...>)
-            noexcept(noexcept((std::get<I>(awaiters_).onSuspend(handle), ...)))
+        template <std::size_t ... I>
+        void onAbort(std::index_sequence<I...>)
         {
-            (std::get<I>(awaiters_).onSuspend(handle), ...);
+            (std::get<I>(awaiters_).onAbort(), ...);
         }
 
     private:
-        std::tuple<TAwaiter && ...> awaiters_;
+        std::tuple<TAwaiter&&...> awaiters_;
     };
 }

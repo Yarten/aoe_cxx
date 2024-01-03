@@ -2,28 +2,55 @@
 // Created by yarten on 24-1-3.
 //
 
-#include <string>
+#include <iostream>
 #include <aoe/async/coroutine/selector.h>
 
-class A
-{
-public:
-    bool isReady() { return true; }
-};
 
-class B
+class FakeAwaiter
 {
 public:
-    bool isReady() { return false; }
+    explicit FakeAwaiter(bool is_ready, int n)
+        : is_ready_(is_ready), n_(n)
+    {
+        std::cout << "FakeAwaiter() " << n_ << std::endl;
+    }
+
+    ~FakeAwaiter()
+    {
+        std::cout << "~FakeAwaiter() " << n_ << std::endl;
+    }
+
+    bool await_resume()
+    {
+        std::cout << "await_resume() " << n_ << std::endl;
+        return true;
+    }
+
+    void await_abort()
+    {
+        std::cout << "await_abort() " << n_ << std::endl;
+    }
+
+    bool isReady() const
+    {
+        return is_ready_;
+    }
+
+private:
+    bool is_ready_ = false;
+    int  n_ = 0;
 };
 
 
 int main()
 {
-    aoe::async::coroutine::Selector select {A(), B()};
+    int n = 0;
 
-    select.isReady();
-
+    aoe::async::coroutine::Selector {
+        FakeAwaiter(false, ++n),
+        FakeAwaiter(true, ++n),
+        FakeAwaiter(true, ++n)
+    }.onResume();
 
     return 0;
 }

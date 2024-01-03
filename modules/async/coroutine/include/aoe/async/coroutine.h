@@ -16,4 +16,7 @@ namespace aoe::async
 
     template<class T = void>
     using Go = coroutine::Holder<void, T>;
+
+    template<class ... TAwaiter>
+    using select = coroutine::Selector<TAwaiter...>;
 }
