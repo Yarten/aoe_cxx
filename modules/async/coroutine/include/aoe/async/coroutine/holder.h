@@ -120,9 +120,9 @@ namespace aoe::async::coroutine
         }
 
     private:
-        class YieldAwaiter : public Base::Awaiter<YieldAwaiter>
+        class YieldAwaiter : public BoolAwaiter<YieldAwaiter>
         {
-            using Super = Base::Awaiter<YieldAwaiter>;
+            using Super = BoolAwaiter<YieldAwaiter>;
         public:
             [[nodiscard]]
             bool isReady() const

@@ -339,4 +339,81 @@ namespace aoe::async::coroutine
             exception_ptr_ = std::current_exception();
         }
     };
+
+    template<class TDerived>
+    class BoolAwaiter : public Base::Awaiter<BoolAwaiter<TDerived>>
+    {
+    public:
+        using Base::Awaiter<BoolAwaiter>::Awaiter;
+
+        void abort()
+        {
+            derived().onAbort();
+
+            if (false_callback_)
+                false_callback_();
+        }
+
+        TDerived && operator&(std::function<void()> true_callback) &&
+        {
+            true_callback_ = std::move(true_callback);
+            return std::move(derived());
+        }
+
+        TDerived && operator|(std::function<void()> false_callback) &&
+        {
+            false_callback_ = std::move(false_callback);
+            return std::move(derived());
+        }
+
+    private:
+        friend class Base::Awaiter<BoolAwaiter>;
+
+        [[nodiscard]]
+        bool isReady() const
+            noexcept(noexcept(derived().isReady()))
+        {
+            return derived().isReady();
+        }
+
+        void onSuspend(const std::coroutine_handle<Base> handle)
+            noexcept(noexcept(derived().onSuspend({})))
+        {
+            derived().onSuspend(handle);
+        }
+
+        bool onResume()
+        {
+            const bool result = derived().onResume();
+
+            if (result)
+            {
+                if (true_callback_)
+                    true_callback_();
+            }
+            else
+            {
+                if (false_callback_)
+                    false_callback_();
+            }
+
+            return result;
+        }
+
+    private:
+        TDerived& derived() noexcept
+        {
+            return *static_cast<TDerived*>(this);
+        }
+
+        [[nodiscard]]
+        const TDerived& derived() const noexcept
+        {
+            return *static_cast<const TDerived*>(this);
+        }
+
+    private:
+        std::function<void()> true_callback_;
+        std::function<void()> false_callback_;
+    };
 }

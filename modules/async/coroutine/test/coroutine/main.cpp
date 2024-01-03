@@ -22,14 +22,19 @@ aoe::async::Go<> printValue()
 {
     auto h = getValue();
 
-    for (int n = 0; co_await(h >> n);)
+    for (int n = 0;
+        co_await(
+            h >> n
+            & [](){ std::cout << "cb "; }
+            | [](){ std::cout << "END" << std::endl; }
+        );
+    )
     {
         std::cout << n << std::endl;
     }
 
     std::cout << "final " << (co_await doSomethingForValue()) << std::endl;
 }
-
 
 int main()
 {

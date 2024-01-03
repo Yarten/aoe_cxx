@@ -6,6 +6,7 @@
 
 #include "./coroutine/holder.h"
 #include "./coroutine/pipe.h"
+#include "./coroutine/selector.h"
 
 
 namespace aoe::async
