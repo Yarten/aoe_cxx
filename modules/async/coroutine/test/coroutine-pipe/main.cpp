@@ -5,12 +5,11 @@
 #include <variant>
 #include <atomic>
 #include <coroutine>
+#include <vector>
 #include <iostream>
 
 
 int main()
 {
-    std::variant<std::string> v;
-
     return 0;
 }

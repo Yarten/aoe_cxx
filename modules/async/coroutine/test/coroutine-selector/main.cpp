@@ -46,11 +46,12 @@ int main()
 {
     int n = 0;
 
-    aoe::async::coroutine::Selector {
+    aoe::async::coroutine::Selector x{
         FakeAwaiter(false, ++n),
         FakeAwaiter(true, ++n),
         FakeAwaiter(true, ++n)
-    }.onResume();
+    };
+    x.onResume();
 
     return 0;
 }

@@ -12,16 +12,25 @@ namespace aoe::async::coroutine::pipe_details
     template<class Tag>
     class Id
     {
-        enum: std::uint32_t { INVALID_ID = static_cast<std::uint32_t>(-1) };
+        enum: std::uint32_t {
+            INVALID_ID = static_cast<std::uint32_t>(-1),
+            CLOSED_ID  = static_cast<std::uint32_t>(-2),
+            MAX_ID     = static_cast<std::uint32_t>(-3)
+        };
     public:
         [[nodiscard]] constexpr bool valid() const
         {
-            return num_ == INVALID_ID;
+            return num_ != INVALID_ID and num_ != CLOSED_ID;
         }
 
         [[nodiscard]] constexpr std::uint32_t num() const
         {
             return num_;
+        }
+
+        constexpr void close()
+        {
+            num_ = CLOSED_ID;
         }
 
     private:
@@ -34,7 +43,7 @@ namespace aoe::async::coroutine::pipe_details
             explicit Creator(const std::uint32_t max_count)
                 : count_(max_count)
             {
-                assert(max_count > 0 and max_count < INVALID_ID);
+                assert(max_count > 0 and max_count <= MAX_ID);
             }
 
             Id next()

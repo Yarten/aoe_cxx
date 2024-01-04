@@ -208,5 +208,24 @@ namespace aoe::async::coroutine::pipe_details
             OneOneContext & self_;
             T & result_;
         };
+
+    public:
+        SendAwaiter send(const SendId id, const T & data)
+        {
+            assert(id.valid());
+            return {*this, data};
+        }
+
+        SendAwaiter send(const SendId id, T && data)
+        {
+            assert(id.valid());
+            return {*this, std::move(data)};
+        }
+
+        RecvAwaiter recv(const RecvId id, T & result)
+        {
+            assert(id.valid());
+            return {*this, result};
+        }
     };
 }

@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstddef>
 #include <functional>
+#include <aoe/panic.h>
 
 
 namespace aoe::async::coroutine::cache_details
@@ -156,7 +157,7 @@ namespace aoe::async::coroutine::cache_details
                 }
             }
 
-            std::abort(); // Impossible
+            panic.wtf("It must be able to fetch one available cache leaf.");
         }
 
         /**

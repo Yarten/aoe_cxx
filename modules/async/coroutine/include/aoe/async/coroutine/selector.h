@@ -63,7 +63,8 @@ namespace aoe::async::coroutine
             bool success = false;
             bool some_ready = false;
 
-            ([&](auto && i)
+            (
+                [&](auto && i)
                 {
                     if (some_ready or not i.isReady())
                         i.await_abort();
@@ -73,7 +74,8 @@ namespace aoe::async::coroutine
                         success = i.await_resume();
                     }
                 }
-                (std::get<I>(awaiters_)), ...);
+                (std::get<I>(awaiters_))
+                , ...);
 
             return success;
         }
