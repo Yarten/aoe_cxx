@@ -120,6 +120,7 @@ namespace aoe::async::coroutine::pipe_details
             friend class OneOneContext;
 
             SendAwaiter(OneOneContext & self, const T & data)
+                requires(std::is_copy_assignable_v<T>)
                 : Super(currentHandle()), self_(self), data_(std::ref(data))
             {
             }
@@ -145,7 +146,10 @@ namespace aoe::async::coroutine::pipe_details
                     status = self_.buffer_.enqueue(std::move(std::get<INDEX_VALUE>(data_)));
                     break;
                 case INDEX_REF:
-                    status = self_.buffer_.enqueue(std::get<INDEX_REF>(data_));
+                    if constexpr (std::is_copy_assignable_v<T>)
+                        status = self_.buffer_.enqueue(std::get<INDEX_REF>(data_));
+                    else
+                        panic.wtf("");
                 default:
                     break;
                 }
@@ -211,6 +215,7 @@ namespace aoe::async::coroutine::pipe_details
 
     public:
         SendAwaiter send(const SendId id, const T & data)
+            requires(std::is_copy_assignable_v<T>)
         {
             assert(id.valid());
             return {*this, data};

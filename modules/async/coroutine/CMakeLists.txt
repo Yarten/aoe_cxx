@@ -1,5 +1,5 @@
 aoe_add_library(coroutine
-    DEPEND macro panic ${3rd-concurrentqueue}
+    DEPEND trait macro panic ${3rd-concurrentqueue}
 )
 
 aoe_add_executable_test(coroutine)

@@ -33,6 +33,13 @@ namespace aoe::async::coroutine::pipe_details
             num_ = CLOSED_ID;
         }
 
+        static Id fromNum(std::uint32_t num)
+        {
+            Id result;
+            result.num_ = num;
+            return result;
+        }
+
     private:
         std::uint32_t num_ = INVALID_ID;
 
