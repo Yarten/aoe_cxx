@@ -112,13 +112,6 @@ namespace aoe::async::coroutine
         Holder & operator=(const Holder &) = delete;
         Holder & operator=(Holder &&) = delete;
 
-        Deleter intoDeleter() &&
-        {
-            Deleter r(handle_);
-            handle_ = {};
-            return r;
-        }
-
     private:
         class YieldAwaiter : public BoolAwaiter<YieldAwaiter>
         {

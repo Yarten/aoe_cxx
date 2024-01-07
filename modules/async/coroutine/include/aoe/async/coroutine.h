@@ -7,6 +7,7 @@
 #include "./coroutine/holder.h"
 #include "./coroutine/pipe.h"
 #include "./coroutine/selector.h"
+#include "./coroutine/pool.h"
 
 
 namespace aoe::async
@@ -19,4 +20,9 @@ namespace aoe::async
 
     template<class ... TAwaiter>
     using select = coroutine::Selector<TAwaiter...>;
+
+    template<class T>
+    using Pipe = coroutine::Pipe<T>;
+
+    inline coroutine::Pool go;
 }

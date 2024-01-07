@@ -18,9 +18,33 @@ namespace aoe::async::coroutine::pipe_details
             MAX_ID     = static_cast<std::uint32_t>(-3)
         };
     public:
+        Id() = default;
+
+        Id(Id && other) noexcept
+        {
+            operator=(std::move(other));
+        }
+
+        Id & operator=(Id && other) noexcept
+        {
+            if (this == &other)
+                return *this;
+
+            num_ = other.num_;
+            other.num_ = INVALID_ID;
+
+            return *this;
+        }
+
+    public:
         [[nodiscard]] constexpr bool valid() const
         {
             return num_ != INVALID_ID and num_ != CLOSED_ID;
+        }
+
+        [[nodiscard]] constexpr bool closed() const
+        {
+            return num_ == CLOSED_ID;
         }
 
         [[nodiscard]] constexpr std::uint32_t num() const
@@ -74,8 +98,13 @@ namespace aoe::async::coroutine::pipe_details
                 return id;
             }
 
+            [[nodiscard]] bool hasNext() const
+            {
+                return count_.load(std::memory_order::acquire) == 0;
+            }
+
         private:
-            std::atomic_uint32_t count_;
+            std::atomic_uint32_t count_ = INVALID_ID;
         };
     };
 

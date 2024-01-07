@@ -23,10 +23,25 @@ namespace aoe::async::coroutine
         {
         }
 
+        Deleter(const Deleter &) = delete;
+        Deleter & operator=(const Deleter &) = delete;
+        Deleter & operator=(Deleter &&) = delete;
+
+        Deleter(Deleter && other) noexcept
+            : handle_(other.handle_)
+        {
+            other.handle_ = {};
+        }
+
         ~Deleter()
         {
             if (handle_.address() != nullptr)
                 handle_.destroy();
+        }
+
+        [[nodiscard]] std::coroutine_handle<> getHandle() const
+        {
+            return handle_;
         }
 
     private:

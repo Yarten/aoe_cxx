@@ -27,19 +27,17 @@ int main()
 
     aoe::async::coroutine::pipe_details::SizedVector<A> v(10);
 
-    aoe::async::coroutine::pipe_details::SizedVector<A>::Element element = v[5];
+    aoe::async::coroutine::pipe_details::SizedVector<A>::Element & element = v[5];
     element.construct();
     element->x.store(2);
     element.destruct();
 
     v[4].construct();
 
-    struct B
+    for(auto [idx, i] : v.viewUsing())
     {
-        int & x;
-    };
-
-    std::optional<B> x;
+        std::cout << idx << " " << i.x.load() << std::endl;
+    }
 
     return 0;
 }

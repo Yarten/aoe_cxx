@@ -31,3 +31,12 @@ namespace aoe::trait
         return const_cast<const T*>(x);
     }
 }
+
+namespace aoe::trait
+{
+    template<class ... TOps>
+    struct impl : TOps ...
+    {
+        using TOps::operator()...;
+    };
+}

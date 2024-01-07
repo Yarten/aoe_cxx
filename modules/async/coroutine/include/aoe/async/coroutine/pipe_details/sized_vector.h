@@ -4,9 +4,10 @@
 
 #pragma once
 
-#include <vector>
+#include <memory>
 #include <cassert>
 #include <atomic>
+#include <ranges>
 
 
 namespace aoe::async::coroutine::pipe_details
@@ -70,7 +71,7 @@ namespace aoe::async::coroutine::pipe_details
 
     public:
         explicit SizedVector(std::size_t max_size)
-            : elements_(max_size)
+            : elements_(new Element[max_size]), capacity_(max_size)
         {
         }
 
@@ -81,10 +82,38 @@ namespace aoe::async::coroutine::pipe_details
 
         [[nodiscard]] std::size_t capacity() const
         {
-            return elements_.size();
+            return capacity_;
+        }
+
+        auto viewUsing()
+        {
+            return
+                std::views::iota(0ul, capacity_)
+            |
+                std::views::transform(
+                    [this](const std::size_t idx) -> std::pair<std::size_t, Element &>
+                    {
+                        return {idx, elements_[idx]};
+                    }
+                )
+            |
+                std::views::filter(
+                    [](const std::pair<std::size_t, Element &> & pair)
+                    {
+                        return pair.second.isUsing();
+                    }
+                )
+            |
+                std::views::transform(
+                    [](const std::pair<std::size_t, Element &> & src) -> std::pair<std::size_t, T &>
+                    {
+                        return {src.first, *src.second.operator->()};
+                    }
+                );
         }
 
     private:
-        std::vector<Element> elements_;
+        std::unique_ptr<Element[]> elements_;
+        const std::size_t capacity_;
     };
 }

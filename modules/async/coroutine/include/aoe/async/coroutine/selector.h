@@ -83,7 +83,7 @@ namespace aoe::async::coroutine
         template <std::size_t ... I>
         void onAbort(std::index_sequence<I...>)
         {
-            (std::get<I>(awaiters_).onAbort(), ...);
+            (std::get<I>(awaiters_).await_abort(), ...);
         }
 
     private:

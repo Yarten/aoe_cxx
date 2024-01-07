@@ -6,8 +6,9 @@
 
 #include <variant>
 #include <moodycamel/readerwriterqueue.h>
-#include "./id.h"
 
+#include <aoe/trait.h>
+#include "./id.h"
 #include "../base.h"
 
 
@@ -17,8 +18,8 @@ namespace aoe::async::coroutine::pipe_details
     class OneOneContext
     {
     public:
-        OneOneContext(const std::shared_ptr<Pool> pool, const std::size_t buffer_size) :
-            pool_(pool),
+        OneOneContext(std::shared_ptr<Pool> pool, const std::size_t buffer_size) :
+            pool_(std::move(pool)),
             send_id_creator_(1),
             recv_id_creator_(1),
             buffer_size_(buffer_size),
@@ -54,6 +55,16 @@ namespace aoe::async::coroutine::pipe_details
             awake(pool_, awaiting_send_.exchange({}, std::memory_order::acquire));
         }
 
+        [[nodiscard]] bool isSendClosed() const
+        {
+            return send_closed_.load(std::memory_order::acquire);
+        }
+
+        [[nodiscard]] bool isRecvClosed() const
+        {
+            return recv_closed_.load(std::memory_order::acquire);
+        }
+
     private:
         std::weak_ptr<Pool> pool_;
 
@@ -70,12 +81,10 @@ namespace aoe::async::coroutine::pipe_details
         std::atomic<std::coroutine_handle<Base>> awaiting_recv_;
 
     public:
-        class SendAwaiter : public BoolAwaiter<SendAwaiter>
+        class Sender
         {
-            using Super = BoolAwaiter<SendAwaiter>;
         public:
-            [[nodiscard]]
-            bool isReady() const
+            [[nodiscard]] bool isReady() const
             {
                 if (self_.recv_closed_.load(std::memory_order::acquire))
                     return true;
@@ -83,7 +92,52 @@ namespace aoe::async::coroutine::pipe_details
                 if (self_.buffer_size_ == 0)
                     return self_.awaiting_recv_.load(std::memory_order::acquire).address() != nullptr;
 
+                // TODO: 被别人唤醒时，可能会调用这个函数进行检查，是否真的 ready，此时如果 buffer size 为零，那么 awaiting_recv
+                // 一定不存在，且数据也已经被拿走。也许得补充检查一下？包括 OMC 的分发模式
+
                 return self_.buffer_.size_approx() < self_.buffer_size_;
+            }
+
+            void send(const T & data) requires(std::is_copy_assignable_v<T>)
+            {
+                self_.buffer_.enqueue(data) or throw std::bad_alloc();
+            }
+
+            void send(T && data)
+            {
+                self_.buffer_.enqueue(std::move(data)) or throw std::bad_alloc();
+            }
+
+            template<class TMovedOrCopied>
+            bool sendAndAwake(TMovedOrCopied && data)
+            {
+                if (self_.recv_closed_.load(std::memory_order::acquire))
+                    return false;
+
+                send(std::forward<TMovedOrCopied>(data));
+                awake(self_.pool_, self_.awaiting_recv_.exchange({}, std::memory_order::acquire));
+                return true;
+            }
+
+        private:
+            friend class OneOneContext;
+
+            explicit Sender(OneOneContext & self)
+                : self_(self)
+            {
+            }
+
+        private:
+            OneOneContext & self_;
+        };
+
+        class SendAwaiter : public BoolAwaiter<SendAwaiter>
+        {
+            using Super = BoolAwaiter<SendAwaiter>;
+        public:
+            [[nodiscard]] bool isReady() const
+            {
+                return sender_.isReady();
             }
 
             void onSuspend(const std::coroutine_handle<Base> handle)
@@ -91,7 +145,7 @@ namespace aoe::async::coroutine::pipe_details
                 // when the buffer size is zero, it is the case that sender and receiver exchange data directly.
                 // when the sender is suspended to wait for the receiver, we should push the data to avoid that
                 // the receiver is also suspended because of the empty buffer.
-                if (self_.buffer_size_ == 0 and self_.buffer_.size_approx() == 0)
+                if (self_.buffer_size_ == 0)
                     pushData();
 
                 self_.awaiting_send_.store(handle, std::memory_order::release);
@@ -114,6 +168,9 @@ namespace aoe::async::coroutine::pipe_details
             void onAbort()
             {
                 self_.awaiting_send_.store({}, std::memory_order::release);
+
+                if (self_.buffer_size_ == 0)
+                    self_.buffer_.pop();
             }
 
         private:
@@ -121,46 +178,39 @@ namespace aoe::async::coroutine::pipe_details
 
             SendAwaiter(OneOneContext & self, const T & data)
                 requires(std::is_copy_assignable_v<T>)
-                : Super(currentHandle()), self_(self), data_(std::ref(data))
+                : Super(currentHandle()), self_(self), data_(std::ref(data)), sender_(self)
             {
             }
 
             SendAwaiter(OneOneContext & self, T && data)
-                : Super(currentHandle()), self_(self), data_(std::move(data))
+                : Super(currentHandle()), self_(self), data_(std::move(data)), sender_(self)
             {
             }
 
         private:
             void pushData()
             {
-                bool status = false;
-
-                constexpr std::size_t INDEX_VALUE = 0;
-                constexpr std::size_t INDEX_REF   = 1;
-                static_assert(std::is_same_v<decltype(std::get<INDEX_VALUE>(data_)), T>);
-                static_assert(std::is_same_v<decltype(std::get<INDEX_REF>(data_)), const T &>);
-
-                switch (data_.index())
-                {
-                case INDEX_VALUE:
-                    status = self_.buffer_.enqueue(std::move(std::get<INDEX_VALUE>(data_)));
-                    break;
-                case INDEX_REF:
-                    if constexpr (std::is_copy_assignable_v<T>)
-                        status = self_.buffer_.enqueue(std::get<INDEX_REF>(data_));
-                    else
-                        panic.wtf("");
-                default:
-                    break;
-                }
-
-                if (not status)
-                    throw std::bad_alloc();
+                std::visit(
+                    trait::impl {
+                        [&](T & i)
+                        {
+                            return sender_.send(std::move(i));
+                        },
+                        [&](std::reference_wrapper<const T> & i)
+                        {
+                            if constexpr (std::is_copy_assignable_v<T>)
+                                return sender_.send(i.get());
+                            else
+                                panic.wtf("");
+                        }
+                    }, data_
+                );
             }
 
         private:
             OneOneContext & self_;
             std::variant<T, std::reference_wrapper<const T>> data_;
+            Sender sender_;
         };
 
         class RecvAwaiter : public BoolAwaiter<RecvAwaiter>
@@ -213,21 +263,18 @@ namespace aoe::async::coroutine::pipe_details
             T & result_;
         };
 
+        using SendAwaiterType = SendAwaiter;
+        using RecvAwaiterType = RecvAwaiter;
+
     public:
-        SendAwaiter send(const SendId id, const T & data)
-            requires(std::is_copy_assignable_v<T>)
+        template<class TMovedOrCopied>
+        SendAwaiterType send(const Sender id, TMovedOrCopied && data)
         {
             assert(id.valid());
-            return {*this, data};
+            return {*this, std::forward<TMovedOrCopied>(data)};
         }
 
-        SendAwaiter send(const SendId id, T && data)
-        {
-            assert(id.valid());
-            return {*this, std::move(data)};
-        }
-
-        RecvAwaiter recv(const RecvId id, T & result)
+        RecvAwaiterType recv(const RecvId id, T & result)
         {
             assert(id.valid());
             return {*this, result};

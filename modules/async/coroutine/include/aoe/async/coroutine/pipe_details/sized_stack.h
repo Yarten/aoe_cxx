@@ -5,6 +5,7 @@
 #pragma once
 
 #include <vector>
+#include <ranges>
 #include <type_traits>
 #include <aoe/trait.h>
 
@@ -49,6 +50,19 @@ namespace aoe::async::coroutine::pipe_details
         const T & operator[](const std::size_t idx) const
         {
             return deref(idx);
+        }
+
+        auto view() const
+        {
+            return
+                std::views::iota(0ul, size_)
+            |
+                std::transform(
+                    [this](const std::size_t idx) -> const T &
+                    {
+                        return deref(idx);
+                    }
+                );
         }
 
     private:
