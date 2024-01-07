@@ -15,7 +15,7 @@ namespace aoe::async::coroutine
 	template<class H>
 	concept GoFuncHandlerTrait = requires(H && h)
 	{
-		{ h.intoDeleter() } -> std::same_as<Deleter>;
+		{ h.intoHandle() } -> std::same_as<std::coroutine_handle<Base>>;
 	};
 
 	template<class F, class ... TArgs>
@@ -47,14 +47,14 @@ namespace aoe::async::coroutine
         	const auto curr_h = switchTo({});
 			suspendCurrentInitPoint(true);
 
-        	add(go_func(std::forward<TArgs>(args)...).intoDeleter());
+        	add(go_func(std::forward<TArgs>(args)...).intoHandle());
 
         	switchTo(curr_h);
         	suspendCurrentInitPoint(false);
         }
 
 	private:
-		void add(Deleter deleter);
+		void add(std::coroutine_handle<Base> handle);
 
     private:
 	    std::unique_ptr<Impl> impl_;

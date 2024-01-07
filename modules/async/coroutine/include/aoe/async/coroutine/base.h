@@ -39,11 +39,6 @@ namespace aoe::async::coroutine
                 handle_.destroy();
         }
 
-        [[nodiscard]] std::coroutine_handle<> getHandle() const
-        {
-            return handle_;
-        }
-
     private:
         std::coroutine_handle<> handle_;
     };
@@ -56,12 +51,15 @@ namespace aoe::async::coroutine
 
     enum class State
     {
+        // The coroutine is newly created.
+        Initial,
+
         // The coroutine is not running and is not ready to run.
         // This state can only be transformed from the Suspending state.
         Suspended,
 
         // The coroutine is not running, but is ready to run.
-        // This state is the initial state, and can only be transformed from the Suspended state.
+        // This state can only be transformed from the Suspended state.
         Queuing,
 
         // The coroutine is running on pool, all suspensions have not been performed.
@@ -97,6 +95,12 @@ namespace aoe::async::coroutine
         std::coroutine_handle<> getFatherHandle() const noexcept
         {
             return father_handle_;
+        }
+
+        [[nodiscard]]
+        bool isInitial() const
+        {
+            return state_.load(std::memory_order::release) == State::Initial;
         }
 
         void setCacheDeleter(CacheElement<Deleter> deleter) noexcept
@@ -161,7 +165,7 @@ namespace aoe::async::coroutine
         CacheElement<Deleter> cache_deleter_;
 
         // The execution state of this corotuine.
-        std::atomic<State> state_ = State::Queuing;
+        std::atomic<State> state_ = State::Initial;
 
     private:
         enum class AwaiterType

@@ -20,7 +20,7 @@ namespace aoe::async::coroutine
 
     }
 
-    void Pool::add(Deleter deleter)
+    void Pool::add(std::coroutine_handle<Base> handle)
     {
     }
 

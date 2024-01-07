@@ -46,11 +46,11 @@ namespace aoe::async::coroutine
         Holder & operator=(const Holder &) = delete;
         Holder & operator=(Holder &&) = delete;
 
-        Deleter intoDeleter() &&
+        std::coroutine_handle<Base> intoHandle() &&
         {
-            Deleter r(handle_);
+            auto result = std::coroutine_handle<Base>::from_address(handle_.address());
             handle_ = {};
-            return r;
+            return result;
         }
 
     public:

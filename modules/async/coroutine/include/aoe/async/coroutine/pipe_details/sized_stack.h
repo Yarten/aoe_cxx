@@ -47,6 +47,11 @@ namespace aoe::async::coroutine::pipe_details
             return size_;
         }
 
+        [[nodiscard]] std::size_t capacity() const
+        {
+            return nodes_.size();
+        }
+
         const T & operator[](const std::size_t idx) const
         {
             return deref(idx);
