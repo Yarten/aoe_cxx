@@ -103,6 +103,13 @@ namespace aoe::async::coroutine
             return state_.load(std::memory_order::release) == State::Initial;
         }
 
+        /**
+         * \brief Switch the suspending state to the suspended state.
+         * \return The state after the operation.
+         * If the original state is not the suspending state, it returns the original state.
+         */
+        State switchToSuspendedState();
+
         void setCacheDeleter(CacheElement<Deleter> deleter) noexcept
         {
             cache_deleter_.swap(deleter);

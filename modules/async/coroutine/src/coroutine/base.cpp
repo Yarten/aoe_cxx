@@ -7,6 +7,18 @@
 
 namespace aoe::async::coroutine
 {
+    State Base::switchToSuspendedState()
+    {
+        auto original_state = State::Suspending;
+
+        return state_.compare_exchange_strong(
+            original_state,
+            State::Suspended,
+            std::memory_order::acquire,
+            std::memory_order::relaxed
+        ) ? State::Suspended : original_state;
+    }
+
     void Base::suspendFrom(const AwaiterType type) noexcept
     {
         if (type == AwaiterType::Init)
@@ -48,30 +60,38 @@ namespace aoe::async::coroutine
 
     bool Base::setReadyToResume() noexcept
     {
-        // awake this coroutine when it is suspended
-        if (auto exepcted_suspended_state = State::Suspended;
-            state_.compare_exchange_strong(
-            exepcted_suspended_state,
-            State::Queuing,
-            std::memory_order::acquire,
-            std::memory_order::relaxed
-        ))
+        State state;
+
+        do
         {
-            const std::chrono::steady_clock::time_point curr_time_point = std::chrono::steady_clock::now();
-            wait_time_ += (curr_time_point - last_time_point_);
-            last_time_point_ = curr_time_point;
-            return true;
-        }
+            // awake this coroutine if it is suspended
+            if (state = State::Suspended;
+                state_.compare_exchange_strong(
+                state,
+                State::Queuing,
+                std::memory_order::acquire,
+                std::memory_order::relaxed
+            ))
+            {
+                const std::chrono::steady_clock::time_point curr_time_point = std::chrono::steady_clock::now();
+                wait_time_ += (curr_time_point - last_time_point_);
+                last_time_point_ = curr_time_point;
+                return true;
+            }
 
-        // resume this coroutine immediately when it finshes suspending
-        auto expected_suspending_state = State::Suspending;
-        state_.compare_exchange_strong(
-            expected_suspending_state,
-            State::SuspendBroken,
-            std::memory_order::acquire,
-            std::memory_order::relaxed
-        );
+            // resume this coroutine immediately when it finshes suspending
+            state = State::Suspending;
+            state_.compare_exchange_strong(
+                state,
+                State::SuspendBroken,
+                std::memory_order::acquire,
+                std::memory_order::relaxed
+            );
 
+            // after the above operations, the state must not be State::Suspended
+        } while (state == State::Suspended);
+
+        // the case that coroutine is queuing or suspend broken
         return false;
     }
 }

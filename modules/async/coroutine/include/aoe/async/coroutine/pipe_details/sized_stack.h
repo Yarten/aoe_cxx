@@ -62,10 +62,23 @@ namespace aoe::async::coroutine::pipe_details
             return
                 std::views::iota(0ul, size_)
             |
-                std::transform(
+                std::views::transform(
                     [this](const std::size_t idx) -> const T &
                     {
                         return deref(idx);
+                    }
+                );
+        }
+
+        auto view()
+        {
+            return
+                trait::add_const(this)->view()
+            |
+                std::views::transform(
+                    [](const T & src) -> T &
+                    {
+                        return trait::remove_const(src);
                     }
                 );
         }

@@ -54,10 +54,12 @@ namespace aoe::async::coroutine
         }
 
 	private:
+		friend void awake(std::weak_ptr<Pool> _pool, std::coroutine_handle<Base> handle);
+
 		void add(std::coroutine_handle<Base> handle);
 
     private:
-	    std::unique_ptr<Impl> impl_;
 		std::shared_ptr<Pool> lifetime_;
+	    std::unique_ptr<Impl> impl_;
     };
 }
