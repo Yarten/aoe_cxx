@@ -5,3 +5,7 @@
 #pragma once
 
 #include "./macro/fancier.h"
+#include "./macro/count.h"
+#include "./macro/concat.h"
+#include "./macro/argument.h"
+#include "./macro/invoke.h"

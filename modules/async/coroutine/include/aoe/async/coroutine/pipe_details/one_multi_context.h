@@ -84,7 +84,7 @@ namespace aoe::async::coroutine::pipe_details
 
         RecvId newRecv()
         {
-            const RecvId id = recv_id_creator_.next();
+            RecvId id = recv_id_creator_.next();
 
             if (id.valid())
                 recv_sides_[id.num()].construct(
