@@ -47,11 +47,17 @@ private:
 
 int main()
 {
+    XX a = XX::A(1, 2);
 
+    a = XX::B(true);
 
-    XX::A(1, 2);
+    int aa = 1;
+    double bb = 2;
 
-    XX::B(true);
+    (XX::A | [](const int &, const double &)
+    {
+
+    })(aa, bb);
 
     XX x;
 

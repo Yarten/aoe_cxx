@@ -77,6 +77,49 @@ constexpr auto g(size_t n)
     return s;
 }
 
+template<class TDerived>
+class Base
+{
+public:
+    void f()
+    {
+        auto * self = static_cast<TDerived*>(this);
+
+        auto addr_dirr = []<class T, class E>(const T * lhs, const E * rhs) -> std::size_t
+        {
+            return reinterpret_cast<std::size_t>(lhs) - reinterpret_cast<std::size_t>(rhs);
+        };
+
+        std::cout
+            << addr_dirr(&x, self) << " " << offsetof(Base, x) << std::endl
+            << addr_dirr(&y, self) << " " << offsetof(Base, y) << std::endl
+            << addr_dirr(&self->z, self) << " " << offsetof(TDerived, z) << std::endl
+            << addr_dirr(&self->a, self) << " " << offsetof(TDerived, a) << std::endl;
+    }
+
+protected:
+    int x = 0;
+    int y = 0;
+};
+
+class Derived : public Base<Derived>
+{
+public:
+    int z = 0;
+    int a = 0;
+
+    struct A
+    {
+        constexpr static  inline int x = 0;
+
+        constexpr int operator[](int x) const
+        {
+            return x;
+        }
+    } static inline obj;
+};
+
+
 int main()
 {
     constexpr size_t s = g(262144);
@@ -85,6 +128,10 @@ int main()
 
     std::atomic<int> m;
 
+    Derived b;
+    b.f();
+
+    static_assert(Derived::obj[0] == 0);
 
     return 0;
 }
