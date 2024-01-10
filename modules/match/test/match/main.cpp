@@ -25,7 +25,12 @@ struct MyClass
     }
 };
 
-AOE_ENUM_CLASS(XX, (A, int, double), (B, bool, MyClass), (C, std::string, int, std::string));
+AOE_ENUM_CLASS(
+    XX,
+    (A, int, double),
+    (B, bool, MyClass),
+    (C, std::string, int, std::string)
+);
 
 int main()
 {
@@ -90,22 +95,22 @@ int main()
     };
 
     // if let with boolean condition cascading judgment
-    ifLet(c) > XX::B | [](auto, auto)
+    ifLet(c) |XX::B| [](auto, auto)
     {
-        std::cout << "c is not XX::B !" << std::endl;
+        std::cout << "c is not XX::B ! Somehing wrong !" << std::endl;
     }
-    or ifLet(c) > XX::A | [](int& x, const double y)
+    or ifLet(c) |XX::A| [](int& x, const double y)
     {
         ++x;
         std::cout << "if let use >: " << x << " " << y << std::endl;
     };
 
     // use trait::otherwise to handle the 'else' case
-    ifLet(c) > XX::B | [](auto, auto)
+    ifLet(c) |XX::B| [](auto, auto)
     {
         std::cout << "c is not XX::B ! Somehing wrong !" << std::endl;
     }
-    or aoe::trait::otherwise {
+    or aoe::trait::otherwise{
         []()
         {
             std::cout << "c is not XX::B. Everything good !" << std::endl;

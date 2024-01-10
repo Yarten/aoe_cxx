@@ -115,7 +115,7 @@ namespace aoe::match_details
             }
 
             template<class TEnumField>
-            auto operator>(const TEnumField & field) &&
+            auto operator|(const TEnumField & field) &&
             {
                 return Some<TEnumField>(std::move(*this), field);
             }
