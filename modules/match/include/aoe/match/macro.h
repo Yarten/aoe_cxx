@@ -8,20 +8,25 @@
 #include <aoe/macro.h>
 
 
-#define AOE_ENUM_CLASS(_name_, ...)                               \
-    class _name_ : public ::aoe::match_details::EnumClass<_name_> \
-    {                                                             \
-        using _this_enum_class_type_ = _name_;                    \
-    public:                                                       \
-        using ::aoe::match_details::EnumClass<_name_>::EnumClass; \
-        using ::aoe::match_details::EnumClass<_name_>::operator=; \
-        AOE_INVOKE(AOE_DETAILS_ENUM_FIELD_UNPACK, __VA_ARGS__)    \
-    private:                                                      \
-        ::aoe::match_details::VariantExceptFirstType<             \
-            std::nullptr_t                                        \
-            AOE_INVOKE(AOE_DETAILS_ENUM_TYPE_UNPACK, __VA_ARGS__) \
-        > data_;                                                  \
-        friend class ::aoe::match_details::EnumClass<_name_>;     \
+#define AOE_ENUM_CLASS(_name_, ...)                                         \
+    class _name_ : public ::aoe::match_details::EnumClass<_name_>           \
+    {                                                                       \
+        using _this_enum_class_type_ = _name_;                              \
+    public:                                                                 \
+        _name_() = delete;                                                  \
+        AOE_DECLARE_DEFAULT_COPY_MOVE(_name_);                              \
+        template<class EValueType>                                          \
+        _name_(EValueType && value, ::aoe::match_details::BuildByEnumValue) \
+            : data_(std::forward<EValueType>(value))                        \
+        {                                                                   \
+        }                                                                   \
+        AOE_INVOKE(AOE_DETAILS_ENUM_FIELD_UNPACK, __VA_ARGS__)              \
+    private:                                                                \
+        ::aoe::match_details::VariantExceptFirstType<                       \
+            std::nullptr_t                                                  \
+            AOE_INVOKE(AOE_DETAILS_ENUM_TYPE_UNPACK, __VA_ARGS__)           \
+        > data_;                                                            \
+        friend class ::aoe::match_details::EnumClass<_name_>;               \
     }
 
 // Declare an enum item for aoe enum class

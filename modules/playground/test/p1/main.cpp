@@ -97,6 +97,22 @@ public:
             << addr_dirr(&self->a, self) << " " << offsetof(TDerived, a) << std::endl;
     }
 
+    struct Inner
+    {
+        void g(TDerived * self)
+        {
+            self->u;
+        }
+    };
+
+    void g()
+    {
+        static_cast<TDerived*>(this)->u;
+
+        Inner inner;
+        inner.g(static_cast<TDerived*>(this));
+    }
+
 protected:
     int x = 0;
     int y = 0;
@@ -117,6 +133,10 @@ public:
             return x;
         }
     } static inline obj;
+
+private:
+    double u = 1.0;
+    friend class Base;
 };
 
 
@@ -130,6 +150,7 @@ int main()
 
     Derived b;
     b.f();
+    b.g();
 
     static_assert(Derived::obj[0] == 0);
 

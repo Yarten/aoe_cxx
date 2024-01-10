@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 
 namespace aoe::trait
 {
@@ -39,4 +41,29 @@ namespace aoe::trait
     {
         using TOps::operator()...;
     };
+}
+
+namespace aoe::trait
+{
+    namespace details
+    {
+        template<class F>
+        concept VoidFunctionTrait = requires(F && func)
+        {
+            { func() } -> std::same_as<void>;
+        };
+    }
+
+    template<class TVoidOp> requires(details::VoidFunctionTrait<TVoidOp>)
+    struct otherwise : TVoidOp
+    {
+        using TVoidOp::operator();
+    };
+
+    template<class TVoidOp>
+    constexpr void operator||(const bool con, otherwise<TVoidOp> && ops)
+    {
+        if (not con)
+            ops();
+    }
 }

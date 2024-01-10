@@ -9,3 +9,4 @@
 #include "./macro/concat.h"
 #include "./macro/argument.h"
 #include "./macro/invoke.h"
+#include "./macro/declare.h"

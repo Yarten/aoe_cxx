@@ -5,6 +5,7 @@
 #pragma once
 
 #include "./enum_value.h"
+#include "./enum_class.h"
 
 
 namespace aoe::match_details
@@ -12,6 +13,10 @@ namespace aoe::match_details
     template<class TEnumClass, class Tag, class ... Ts>
     class EnumField
     {
+    public:
+        using ValueType = EnumValue<Tag, Ts...>;
+
+    private:
         template<class F, std::size_t ... I>
         class Arm
         {
@@ -21,36 +26,36 @@ namespace aoe::match_details
             {
             }
 
+            using ArmType = ValueType;
+
         public:
-            auto operator()(const Ts &... args) const
+            auto operator()(const ValueType & value) const
             {
-                return func_(args...);
+                return func_(std::get<I>(value)...);
             }
 
-            auto operator()(Ts &... args) const
+            auto operator()(ValueType & value) const
             {
-                return func_(args...);
+                return func_(std::get<I>(value)...);
             }
 
-            auto operator()(Ts &&... args) const
+            auto operator()(ValueType && value) const
             {
-                return func_(std::move(args)...);
+                return func_(std::get<I>(std::move(value))...);
             }
 
         private:
             F func_;
         };
-    public:
-        using ValueType = EnumValue<Tag, Ts...>;
 
     public:
         TEnumClass operator()(Ts &&... args) const
         {
-            return TEnumClass(ValueType(std::forward<Ts>(args)...));
+            return TEnumClass(ValueType(std::forward<Ts>(args)...), BuildByEnumValue());
         }
 
         template<class F>
-        auto operator|(F && func)
+        auto operator|(F && func) const
         {
             return Arm(std::forward<F>(func), std::make_index_sequence<sizeof...(Ts)>());
         }
