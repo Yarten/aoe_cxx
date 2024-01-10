@@ -19,6 +19,23 @@ struct MyClass
         std::cout << "MyClass(copy)" << std::endl;
     }
 
+    MyClass(MyClass &&) noexcept
+    {
+        std::cout << "MyClass(move)" << std::endl;
+    }
+
+    MyClass & operator=(const MyClass &)
+    {
+        std::cout << "MyClass=(copy)" << std::endl;
+        return *this;
+    }
+
+    MyClass & operator=(MyClass &&) noexcept
+    {
+        std::cout << "MyClass=(move)" << std::endl;
+        return *this;
+    }
+
     ~MyClass()
     {
         std::cout << "~MyClass()" << std::endl;

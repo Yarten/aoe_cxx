@@ -15,17 +15,20 @@
     public:                                                                 \
         _name_() = delete;                                                  \
         AOE_DECLARE_DEFAULT_COPY_MOVE(_name_);                              \
+                                                                            \
         template<class EValueType>                                          \
         _name_(EValueType && value, ::aoe::match_details::BuildByEnumValue) \
             : data_(std::forward<EValueType>(value))                        \
         {                                                                   \
         }                                                                   \
+                                                                            \
         AOE_INVOKE(AOE_DETAILS_ENUM_FIELD_UNPACK, __VA_ARGS__)              \
     private:                                                                \
         ::aoe::match_details::VariantExceptFirstType<                       \
             std::nullptr_t                                                  \
             AOE_INVOKE(AOE_DETAILS_ENUM_TYPE_UNPACK, __VA_ARGS__)           \
         > data_;                                                            \
+                                                                            \
         friend class ::aoe::match_details::EnumClass<_name_>;               \
     }
 

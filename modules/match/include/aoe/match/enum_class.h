@@ -18,7 +18,7 @@ namespace aoe::match_details
     template<class T, class TVariant>
     struct GetIndex;
 
-    template<class T>
+    template<class>
     struct GetIndexTag {};
 
     template<class T, class ... Ts>
