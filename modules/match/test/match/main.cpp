@@ -38,6 +38,7 @@ int main()
 
     a = b;
 
+    // match
     match(a) | aoe::trait::impl{
         XX::A | [](int& x, const double y)
         {
@@ -60,7 +61,7 @@ int main()
         },
         XX::B | [](bool, auto)
         {
-            // return true; // all arm should have the same return type
+            // return true; // all arms should have the same return type
             return 2.2;
         },
         XX::C | [](std::string&& a, const int b, std::string&& c)
@@ -71,6 +72,7 @@ int main()
     };
     std::cout << "result is " << r << std::endl;
 
+    // if let
     ifLet(c) = XX::B | [](auto, auto)
     {
         std::cout << "c is not XX::B !" << std::endl;
@@ -87,6 +89,7 @@ int main()
         std::cout << "if let rvalue " << x << " " << y << " " << z << std::endl;
     };
 
+    // if let with boolean condition cascading judgment
     ifLet(c) > XX::B | [](auto, auto)
     {
         std::cout << "c is not XX::B !" << std::endl;
@@ -97,6 +100,7 @@ int main()
         std::cout << "if let use >: " << x << " " << y << std::endl;
     };
 
+    // use trait::otherwise to handle the 'else' case
     ifLet(c) > XX::B | [](auto, auto)
     {
         std::cout << "c is not XX::B ! Somehing wrong !" << std::endl;
