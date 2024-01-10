@@ -9,11 +9,12 @@
 
 namespace aoe::match_details
 {
-    template<class, class ... Ts>
+    template<class Tag, class ... Ts>
     class EnumValue :
         public std::tuple<Ts...>
     {
     public:
+        using TagType = Tag;
         using std::tuple<Ts...>::tuple;
     };
 }

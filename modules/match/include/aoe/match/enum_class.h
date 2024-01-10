@@ -16,18 +16,39 @@ namespace aoe::match_details
     struct BuildByEnumValue {};
 
     template<class T, class TVariant>
-    struct GetIndex;
+    struct GetVariantIndex;
 
     template<class>
-    struct GetIndexTag {};
+    struct GetVariantIndexTag {};
 
     template<class T, class ... Ts>
-    struct GetIndex<T, std::variant<Ts...>> :
+    struct GetVariantIndex<T, std::variant<Ts...>> :
         std::integral_constant<
             std::size_t,
-            std::variant<GetIndexTag<Ts>...>(GetIndexTag<T>()).index()
+            std::variant<GetVariantIndexTag<Ts>...>(GetVariantIndexTag<T>()).index()
         >
     {
+    };
+
+    template<class TArm>
+    concept HasArmTypeTrait = requires
+    {
+        typename TArm::ArmType;
+    };
+
+    template<class TVariantType, class TArm>
+    struct GetArmIndex;
+
+    template<class TVariantType, class TArm> requires(HasArmTypeTrait<TArm>)
+    struct GetArmIndex<TVariantType, TArm>
+    {
+        constexpr static inline std::size_t value = GetVariantIndex<typename TArm::ArmType, TVariantType>::value;
+    };
+
+    template<class TVariantType, class TArm> requires(not HasArmTypeTrait<TArm>)
+    struct GetArmIndex<TVariantType, TArm>
+    {
+        constexpr static inline std::size_t value = TArm::ARM_INDEX;
     };
 
     template<class TDerived>
@@ -95,7 +116,7 @@ namespace aoe::match_details
                 auto & data = self_.data();
 
                 using VariantType = std::remove_reference_t<decltype(data)>;
-                constexpr std::size_t ARM_INDEX = GetIndex<typename TArm::ArmType, VariantType>::value;
+                constexpr std::size_t ARM_INDEX = GetArmIndex<VariantType, TArm>::value;
 
                 if (data.index() != ARM_INDEX)
                     return false;
