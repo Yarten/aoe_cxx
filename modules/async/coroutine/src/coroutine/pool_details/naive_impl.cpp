@@ -20,9 +20,15 @@ namespace aoe::async::coroutine::pool_details
         }
     }
 
+    NaiveImpl::~NaiveImpl()
+    {
+        workers_.clear();
+    }
+
     void NaiveImpl::addTask(std::coroutine_handle<Base> handle)
     {
-        ready_queue_.enqueue(handle) or throw std::bad_alloc();
+        if (not ready_queue_.enqueue(handle))
+            throw std::bad_alloc();
     }
 }
 
@@ -54,6 +60,7 @@ namespace aoe::async::coroutine::pool_details
     NaiveImpl::Worker::~Worker()
     {
         th_.request_stop();
+        th_.join();
     }
 
     bool NaiveImpl::Worker::waitForTasks()
@@ -97,7 +104,8 @@ namespace aoe::async::coroutine::pool_details
 
         while (ready_queue_.size_approx() < max_count and master_.ready_queue_.try_dequeue(future_task))
         {
-            ready_queue_.enqueue(future_task) or throw std::bad_alloc();
+            if (not ready_queue_.enqueue(future_task))
+                throw std::bad_alloc();
         }
 
         master_.last_dequeue_time_point_ = std::chrono::steady_clock::now();
@@ -160,7 +168,9 @@ namespace aoe::async::coroutine::pool_details
             }
 
             // Execute the coroutine
+            switchTo({});
             current_executing_task_.resume();
+            switchTo({});
 
             switch (ctx.switchToSuspendedState())
             {

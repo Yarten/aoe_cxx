@@ -188,7 +188,7 @@ namespace aoe::async::coroutine::pipe_details
         public:
             [[nodiscard]] bool isReady() const
             {
-                for (typename OneOneContext<T>::SendAwaiter & awaiter : viewRecvSidesSendAwaiters())
+                for (const typename OneOneContext<T>::SendAwaiter & awaiter : viewRecvSidesSendAwaiters())
                 {
                     if (awaiter.isReady())
                     {
@@ -248,8 +248,8 @@ namespace aoe::async::coroutine::pipe_details
 
                 for (auto [id, recv] : self_.viewOpeningRecvSides())
                 {
-                    recv.send_awaiter.emplace(recv.ooc.send(id, data));
-                    self_.send_ctx_.serving_recv_ids_.push(id);
+                    recv.send_awaiter.emplace(recv.ooc.send(SendId::fromNum(1), data));
+                    self_.send_ctx_.serving_recv_ids.push(id);
                 }
             }
 
@@ -257,12 +257,26 @@ namespace aoe::async::coroutine::pipe_details
             auto viewRecvSidesSendAwaiters()
             {
                 return
-                    self_.send_ctx_.serving_recv_ids_.view()
+                    self_.send_ctx_.serving_recv_ids.view()
                 |
                     std::views::transform(
                         [this](const RecvId & id) -> typename OneOneContext<T>::SendAwaiter &
                         {
                             return self_.recv_sides_[id.num()]->send_awaiter.value();
+                        }
+                    );
+            }
+
+            auto viewRecvSidesSendAwaiters() const
+            {
+                return
+                    trait::remove_const(this)->viewRecvSidesSendAwaiters()
+                |
+                    std::views::transform(
+                        [](typename OneOneContext<T>::SendAwaiter & src)
+                            -> const typename OneOneContext<T>::SendAwaiter &
+                        {
+                            return src;
                         }
                     );
             }
@@ -278,7 +292,7 @@ namespace aoe::async::coroutine::pipe_details
         public:
             [[nodiscard]] bool isReady() const
             {
-                for (typename OneOneContext<T>::Sender & sender : viewRecvSidesSenders())
+                for (const typename OneOneContext<T>::Sender & sender : viewRecvSidesSenders())
                 {
                     if (sender.isReady())
                         return true;
@@ -362,15 +376,28 @@ namespace aoe::async::coroutine::pipe_details
             }
 
         private:
-            void viewRecvSidesSenders()
+            auto viewRecvSidesSenders()
             {
                 return
                     self_.viewOpeningRecvSides()
                 |
                     std::views::transform(
-                        [](const std::pair<RecvId, RecvSide<BC_TYPE> &> & pair) -> typename OneOneContext<T>::Sender
+                        [](const std::pair<RecvId, RecvSide<BC_TYPE> &> & pair) -> typename OneOneContext<T>::Sender &
                         {
-                            return pair.secod.sender;
+                            return pair.second.sender;
+                        }
+                    );
+            }
+
+            auto viewRecvSidesSenders() const
+            {
+                return
+                    trait::remove_const(this)->viewRecvSidesSenders()
+                |
+                    std::views::transform(
+                        [](typename OneOneContext<T>::Sender & src) -> const typename OneOneContext<T>::Sender &
+                        {
+                            return src;
                         }
                     );
             }
@@ -409,7 +436,7 @@ namespace aoe::async::coroutine::pipe_details
             friend class OneMultiContext;
 
             RecvAwaiter(OneMultiContext & self, const RecvId id, T & result)
-                : Super({}), recv_awaiter_(self.recv_sides_[id.num()]->ooc.recv(id, result))
+                : Super(currentHandle()), recv_awaiter_(self.recv_sides_[id.num()]->ooc.recv(id, result))
             {
             }
 
@@ -446,7 +473,7 @@ namespace aoe::async::coroutine::pipe_details
             friend class OneMultiContext;
 
             RecvAwaiter(OneMultiContext & self, const RecvId id, T & result)
-                : Super({}), self_(self)
+                : Super(currentHandle()), self_(self)
             {
                 // If the sending coroutine is suspended, and this receiver is the lucky one to take the data,
                 // it sholud awake the sending coroutine and then leave.
@@ -498,7 +525,7 @@ namespace aoe::async::coroutine::pipe_details
         SendAwaiterType send(const SendId id, TMovedOrCopied && data)
         {
             assert(id.valid());
-            return {this, std::forward<TMovedOrCopied>(data)};
+            return {*this, std::forward<TMovedOrCopied>(data)};
         }
 
         RecvAwaiterType recv(const RecvId id, T & result)

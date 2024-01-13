@@ -84,6 +84,11 @@ namespace aoe::async::coroutine::pipe_details
         class Sender
         {
         public:
+            explicit Sender(OneOneContext & self)
+                : self_(self)
+            {
+            }
+
             [[nodiscard]] bool isReady() const
             {
                 if (self_.recv_closed_.load(std::memory_order::acquire))
@@ -100,12 +105,14 @@ namespace aoe::async::coroutine::pipe_details
 
             void send(const T & data) requires(std::is_copy_assignable_v<T>)
             {
-                self_.buffer_.enqueue(data) or throw std::bad_alloc();
+                if (not self_.buffer_.enqueue(data))
+                    throw std::bad_alloc();
             }
 
             void send(T && data)
             {
-                self_.buffer_.enqueue(std::move(data)) or throw std::bad_alloc();
+                if (not self_.buffer_.enqueue(std::move(data)))
+                    throw std::bad_alloc();
             }
 
             template<class TMovedOrCopied>
@@ -117,14 +124,6 @@ namespace aoe::async::coroutine::pipe_details
                 send(std::forward<TMovedOrCopied>(data));
                 awake(self_.pool_, self_.awaiting_recv_.exchange({}, std::memory_order::acquire));
                 return true;
-            }
-
-        private:
-            friend class OneOneContext;
-
-            explicit Sender(OneOneContext & self)
-                : self_(self)
-            {
             }
 
         private:
@@ -268,7 +267,7 @@ namespace aoe::async::coroutine::pipe_details
 
     public:
         template<class TMovedOrCopied>
-        SendAwaiterType send(const Sender id, TMovedOrCopied && data)
+        SendAwaiterType send(const SendId id, TMovedOrCopied && data)
         {
             assert(id.valid());
             return {*this, std::forward<TMovedOrCopied>(data)};

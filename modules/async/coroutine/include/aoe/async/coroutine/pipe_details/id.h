@@ -19,6 +19,8 @@ namespace aoe::async::coroutine::pipe_details
         };
     public:
         Id() = default;
+        Id(const Id &) = default;
+        Id & operator=(const Id &) = default;
 
         Id(Id && other) noexcept
         {

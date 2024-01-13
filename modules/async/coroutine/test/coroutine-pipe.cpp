@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <iostream>
+#include <optional>
 
 
 template<class T>
@@ -28,10 +29,27 @@ void g2(std::string && y)
     f(std::move(y));
 }
 
+struct A
+{
+    int & x;
+};
+
+A f(int & x)
+{
+    return {x};
+}
+
 
 int main()
 {
     g1("abc");
     g2("edf");
+
+    int n = 1;
+    auto a = f(n);
+
+    std::variant<int, A> b;
+    b.emplace<A>(f(n));
+
     return 0;
 }

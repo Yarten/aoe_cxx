@@ -16,9 +16,14 @@ namespace aoe::async::coroutine
 
     Pool::Pool() :
         lifetime_(std::shared_ptr<Pool>(this, [](Pool*){})),
-        impl_(std::make_unique<Impl>(lifetime_))
+        impl_(new Impl(lifetime_))
     {
 
+    }
+
+    Pool::~Pool()
+    {
+        delete impl_;
     }
 
     void Pool::add(std::coroutine_handle<Base> handle)
@@ -28,6 +33,9 @@ namespace aoe::async::coroutine
 
     void awake(const std::weak_ptr<Pool> _pool, std::coroutine_handle<Base> handle)
     {
+        if (handle.address() == nullptr)
+            return;
+
         std::shared_ptr<Pool> pool = _pool.lock();
 
         if (pool == nullptr)

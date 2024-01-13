@@ -24,7 +24,7 @@ namespace aoe::async::coroutine::pool_details
         struct Param
         {
             // timeout for each thread to wait for a new task to arrive
-            std::chrono::duration<std::int64_t> waiting_timeout = std::chrono::seconds(1);
+            std::chrono::duration<double> waiting_timeout = std::chrono::milliseconds(100);
 
             // The maximum number of tasks that a worker can preemptively take from the global ready queue.
             std::size_t capacity_of_working_ready_queue = 3;
@@ -40,6 +40,11 @@ namespace aoe::async::coroutine::pool_details
          * which is related to the maximum number of threads in the hardware.
          */
         explicit NaiveImpl(std::shared_ptr<Pool> pool);
+
+        /**
+         * \brief Stop and clear all workers.
+         */
+        ~NaiveImpl();
 
         /**
          * \brief Add new created coroutine to the global ready queue

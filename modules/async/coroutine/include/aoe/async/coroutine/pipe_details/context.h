@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "./pipe_details/one_one_context.h"
-#include "./pipe_details/one_multi_context.h"
+#include "./one_one_context.h"
+#include "./one_multi_context.h"
 
 
 namespace aoe::async::coroutine::pipe_details
@@ -46,9 +46,15 @@ namespace aoe::async::coroutine::pipe_details
         SendId newSend()
         {
             return std::visit(
-                [](auto& ctx)
-                {
-                    return ctx.newSend();
+                trait::impl{
+                    [](std::nullptr_t) -> SendId
+                    {
+                        panic.wtf("");
+                    },
+                    []<class TContext>(TContext& ctx)
+                    {
+                        return ctx.newSend();
+                    }
                 }, core_
             );
         }
@@ -56,9 +62,15 @@ namespace aoe::async::coroutine::pipe_details
         RecvId newRecv()
         {
             return std::visit(
-                [](auto& ctx)
-                {
-                    return ctx.newRecv();
+                trait::impl{
+                    [](std::nullptr_t) -> RecvId
+                    {
+                        panic.wtf("");
+                    },
+                    []<class TContext>(TContext& ctx)
+                    {
+                        return ctx.newRecv();
+                    }
                 }, core_
             );
         }
@@ -66,9 +78,15 @@ namespace aoe::async::coroutine::pipe_details
         void deleteSend(const SendId id)
         {
             std::visit(
-                [id](auto& ctx)
-                {
-                    ctx.deleteSend(id);
+                trait::impl{
+                    [](std::nullptr_t)
+                    {
+                        panic.wtf("");
+                    },
+                    [id]<class TContext>(TContext& ctx)
+                    {
+                        ctx.deleteSend(id);
+                    }
                 }, core_
             );
         }
@@ -76,26 +94,32 @@ namespace aoe::async::coroutine::pipe_details
         void deleteRecv(const RecvId id)
         {
             std::visit(
-                [id](auto& ctx)
-                {
-                    ctx.deleteRecv(id);
+                trait::impl{
+                    [](std::nullptr_t)
+                    {
+                        panic.wtf("");
+                    },
+                    [id]<class TContext>(TContext& ctx)
+                    {
+                        ctx.deleteRecv(id);
+                    }
                 }, core_
             );
         }
 
     private:
-        template<class ... TContexts>
+        template <class... TContexts>
         struct Trait
         {
-            using ContextType     = std::variant<std::nullptr_t, TContexts ...>;
-            using SendAwaiterType = std::variant<std::nullptr_t, typename TContexts::SendAwaiterType ...>;
-            using RecvAwaiterType = std::variant<std::nullptr_t, typename TContexts::RecvAwaiterType ...>;
+            using ContextType = std::variant<std::nullptr_t, TContexts...>;
+            using SendAwaiterType = std::variant<std::nullptr_t, typename TContexts::SendAwaiterType...>;
+            using RecvAwaiterType = std::variant<std::nullptr_t, typename TContexts::RecvAwaiterType...>;
         };
 
-        template<class E>
+        template <class E>
         struct TypeSelector;
 
-        template<class E> requires(std::is_copy_assignable_v<E>)
+        template <class E> requires(std::is_copy_assignable_v<E>)
         struct TypeSelector<E>
         {
             using Use = Trait<
@@ -106,7 +130,7 @@ namespace aoe::async::coroutine::pipe_details
             >;
         };
 
-        template<class E> requires(not std::is_copy_assignable_v<E>)
+        template <class E> requires(not std::is_copy_assignable_v<E>)
         struct TypeSelector<E>
         {
             using Use = Trait<
@@ -116,15 +140,15 @@ namespace aoe::async::coroutine::pipe_details
         };
 
     private:
-        template<template<class, BroadcastType> class TContext, class ... TArgs>
-        void initCore(const BroadcastType broadcast_type, TArgs &&... args)
+        template <template<class, BroadcastType> class TContext, class... TArgs>
+        void initCore(const BroadcastType broadcast_type, TArgs&&... args)
         {
             switch (broadcast_type)
             {
             case BroadcastType::None:
                 core_.template emplace<TContext<T, BroadcastType::None>>(
-                        std::forward<TArgs>(args)...
-                    );
+                    std::forward<TArgs>(args)...
+                );
                 break;
             case BroadcastType::Some:
                 if constexpr (std::is_copy_assignable_v<T>)
@@ -151,41 +175,61 @@ namespace aoe::async::coroutine::pipe_details
         typename TypeSelector<T>::Use::ContextType core_;
 
     private:
-        template<class TAwaiterType>
+        template <class TDerived, class TAwaiterType>
         class AwaiterBase;
 
-        template<class ... TAwiaters>
-        class AwaiterBase<std::variant<std::nullptr_t, TAwiaters ...>>
-            : public BoolAwaiter<AwaiterBase<std::variant<std::nullptr_t, TAwiaters ...>>>
+        template <class TDerived, class... TAwiaters>
+        class AwaiterBase<TDerived, std::variant<std::nullptr_t, TAwiaters...>>
+            : public BoolAwaiter<AwaiterBase<TDerived, std::variant<std::nullptr_t, TAwiaters...>>>
         {
+            using Super = BoolAwaiter<AwaiterBase>;
+
+            TDerived& derived() noexcept
+            {
+                return *static_cast<TDerived*>(this);
+            }
         public:
             AwaiterBase()
-                : BoolAwaiter<AwaiterBase>(this)
+                : Super(currentHandle())
             {
+            }
+
+            TDerived && operator&(std::function<void()> true_callback) &&
+            {
+                std::move(*this).Super::operator&(std::move(true_callback));
+                return std::move(derived());
+            }
+
+            TDerived && operator|(std::function<void()> false_callback) &&
+            {
+                std::move(*this).Super::operator|(std::move(false_callback));
+                return std::move(derived());
             }
 
         public:
             [[nodiscard]] bool isReady() const
             {
                 return std::visit(
-                    trait::impl {
+                    trait::impl{
                         [](std::nullptr_t) { return true; },
-                        []<class TAwaiter>(TAwaiter & awaiter) -> bool
+                        []<class TAwaiter>(TAwaiter& awaiter) -> bool
                         {
-                            return awaiter.await_ready();
+                            return awaiter.isReady();
                         }
                     }, core_
                 );
             }
 
-            void onSuspend(const std::coroutine_handle<> handle)
+            void onSuspend(const std::coroutine_handle<Base> handle)
             {
                 std::visit(
-                    trait::impl {
-                        [](std::nullptr_t) {},
-                        [handle]<class TAwaiter>(TAwaiter & awaiter)
+                    trait::impl{
+                        [](std::nullptr_t)
                         {
-                            awaiter.await_suspend(handle);
+                        },
+                        [handle]<class TAwaiter>(TAwaiter& awaiter)
+                        {
+                            awaiter.onSuspend(handle);
                         }
                     }, core_
                 );
@@ -194,11 +238,11 @@ namespace aoe::async::coroutine::pipe_details
             bool onResume()
             {
                 return std::visit(
-                    trait::impl {
+                    trait::impl{
                         [](std::nullptr_t) { return false; },
-                        []<class TAwaiter>(TAwaiter & awaiter) -> bool
+                        []<class TAwaiter>(TAwaiter& awaiter) -> bool
                         {
-                            return awaiter.await_resume();
+                            return awaiter.onResume();
                         }
                     }, core_
                 );
@@ -207,56 +251,68 @@ namespace aoe::async::coroutine::pipe_details
             void onAbort()
             {
                 std::visit(
-                    trait::impl {
-                        [](std::nullptr_t) {},
-                        []<class TAwaiter>(TAwaiter & awaiter)
+                    trait::impl{
+                        [](std::nullptr_t)
                         {
-                            awaiter.await_abort();
+                        },
+                        []<class TAwaiter>(TAwaiter& awaiter)
+                        {
+                            awaiter.onAbort();
                         }
                     }, core_
                 );
             }
 
         protected:
-            std::variant<std::nullptr_t, TAwiaters ...> core_;
+            std::variant<std::nullptr_t, TAwiaters...> core_;
         };
 
     public:
-        class SendAwaiter : public AwaiterBase<typename TypeSelector<T>::Use::SendAwaiterType>
+        class SendAwaiter : public AwaiterBase<SendAwaiter, typename TypeSelector<T>::Use::SendAwaiterType>
         {
-            using Super = AwaiterBase<typename TypeSelector<T>::Use::SendAwaiterType>;
+            using Super = AwaiterBase<SendAwaiter, typename TypeSelector<T>::Use::SendAwaiterType>;
+
         private:
             friend class Context;
 
-            template<class TMovedOrCopied>
-            SendAwaiter(Context & self, const SendId id, TMovedOrCopied && data)
+            template <class TMovedOrCopied>
+            SendAwaiter(Context& self, const SendId id, TMovedOrCopied&& data)
             {
                 std::visit(
-                    trait::impl {
-                        [](std::nullptr_t) {},
-                        [&]<class TContext>(TContext & ctx)
+                    trait::impl{
+                        [](std::nullptr_t)
                         {
-                            Super::core_.emplace(ctx.send(id, std::forward<TMovedOrCopied>(data)));
+                        },
+                        [&]<class TContext>(TContext& ctx)
+                        {
+                            Super::core_.template emplace<typename TContext::SendAwaiterType>(
+                                ctx.send(id, std::forward<TMovedOrCopied>(data))
+                            );
                         }
                     }, self.core_
                 );
             }
         };
 
-        class RecvAwaiter : public AwaiterBase<typename TypeSelector<T>::Use::RecvAwaiterType>
+        class RecvAwaiter : public AwaiterBase<RecvAwaiter, typename TypeSelector<T>::Use::RecvAwaiterType>
         {
-            using Super = AwaiterBase<typename TypeSelector<T>::Use::RecvAwaiterType>;
+            using Super = AwaiterBase<RecvAwaiter, typename TypeSelector<T>::Use::RecvAwaiterType>;
+
         private:
             friend class Context;
 
-            RecvAwaiter(Context & self, const RecvId id, T & result)
+            RecvAwaiter(Context& self, const RecvId id, T& result)
             {
                 std::visit(
-                    trait::impl {
-                        [](std::nullptr_t) {},
-                        [&]<class TContext>(TContext & ctx)
+                    trait::impl{
+                        [](std::nullptr_t)
                         {
-                            Super::core_.emplace(ctx.recv(id, result));
+                        },
+                        [&]<class TContext>(TContext& ctx)
+                        {
+                            Super::core_.template emplace<typename TContext::RecvAwaiterType>(
+                                ctx.recv(id, result)
+                            );
                         }
                     }, self.core_
                 );
@@ -264,13 +320,13 @@ namespace aoe::async::coroutine::pipe_details
         };
 
     public:
-        template<class TMovedOrCopied>
-        SendAwaiter send(const SendId id, TMovedOrCopied && data)
+        template <class TMovedOrCopied>
+        SendAwaiter send(const SendId id, TMovedOrCopied&& data)
         {
             return {*this, id, std::forward<TMovedOrCopied>(data)};
         }
 
-        RecvAwaiter recv(const RecvId id, T & result)
+        RecvAwaiter recv(const RecvId id, T& result)
         {
             return {*this, id, result};
         }

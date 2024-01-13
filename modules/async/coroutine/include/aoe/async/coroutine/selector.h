@@ -67,11 +67,11 @@ namespace aoe::async::coroutine
                 [&](auto && i)
                 {
                     if (some_ready or not i.isReady())
-                        i.await_abort();
+                        i.doBoolAwaiterAbort();
                     else
                     {
                         some_ready = true;
-                        success = i.await_resume();
+                        success = i.doBoolAwaiterResume();
                     }
                 }
                 (std::get<I>(awaiters_))
@@ -83,7 +83,7 @@ namespace aoe::async::coroutine
         template <std::size_t ... I>
         void onAbort(std::index_sequence<I...>)
         {
-            (std::get<I>(awaiters_).await_abort(), ...);
+            (std::get<I>(awaiters_).doBoolAwaiterAbort(), ...);
         }
 
     private:

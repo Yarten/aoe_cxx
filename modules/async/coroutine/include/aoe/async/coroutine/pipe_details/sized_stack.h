@@ -25,6 +25,11 @@ namespace aoe::async::coroutine::pipe_details
         {
         }
 
+        ~SizedStack()
+        {
+            clear();
+        }
+
         template<class ... TArgs>
         T & push(TArgs &&... args)
         {

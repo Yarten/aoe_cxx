@@ -25,10 +25,60 @@ namespace aoe::async::coroutine
     template <class T>
     class Pipe
     {
+        class RecvFuncAwaiter : public BoolAwaiter<RecvFuncAwaiter>
+        {
+        public:
+            template <class F>
+            RecvFuncAwaiter(Pipe& self, F&& func)
+                :
+                BoolAwaiter<RecvFuncAwaiter>(nullptr),
+                awaiter_(
+                    self >> result_
+                    & [this, func = std::forward<F>(func)]()
+                    {
+                        func(std::move(result_));
+                    }
+                )
+            {
+            }
+
+        public:
+            [[nodiscard]] bool isReady() const
+            {
+                return awaiter_.isReady();
+            }
+
+            void onSuspend(const std::coroutine_handle<Base> handle)
+            {
+                awaiter_.onSuspend(handle);
+            }
+
+            bool onResume()
+            {
+                return awaiter_.doBoolAwaiterResume();
+            }
+
+            void onAbort()
+            {
+                awaiter_.doBoolAwaiterAbort();
+            }
+
+        private:
+            T result_{};
+            typename pipe_details::Context<T>::RecvAwaiter awaiter_;
+        };
+
     public:
         Pipe() = default;
         Pipe(const Pipe&) = delete;
         Pipe& operator=(const Pipe&) = delete;
+
+        Pipe deviler()
+        {
+            Pipe result;
+            result.ctx_ = ctx_;
+            return result;
+        }
 
         Pipe(Pipe&& other) noexcept
         {
@@ -124,6 +174,12 @@ namespace aoe::async::coroutine
             }
 
             return ctx_->recv(recv_id_, result);
+        }
+
+        template <class F> requires(not std::is_same_v<std::remove_reference_t<F>, T>)
+        RecvFuncAwaiter operator>>(F&& func)
+        {
+            return {*this, std::forward<F>(func)};
         }
 
         void closeSend()

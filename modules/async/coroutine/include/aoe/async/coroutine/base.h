@@ -212,6 +212,10 @@ namespace aoe::async::coroutine
         class Awaiter
         {
         public:
+            explicit Awaiter(std::nullptr_t) noexcept
+            {
+            }
+
             explicit Awaiter(const std::coroutine_handle<Base> handle) noexcept
                 : handle_(handle)
             {
@@ -391,6 +395,17 @@ namespace aoe::async::coroutine
         {
             false_callback_ = std::move(false_callback);
             return std::move(derived());
+        }
+
+    public:
+        bool doBoolAwaiterResume()
+        {
+            return onResume();
+        }
+
+        void doBoolAwaiterAbort()
+        {
+            onAbort();
         }
 
     private:

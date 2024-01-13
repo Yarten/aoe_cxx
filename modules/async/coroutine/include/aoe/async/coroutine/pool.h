@@ -15,7 +15,7 @@ namespace aoe::async::coroutine
 	template<class H>
 	concept GoFuncHandlerTrait = requires(H && h)
 	{
-		{ h.intoHandle() } -> std::same_as<std::coroutine_handle<Base>>;
+		{ std::move(h).intoHandle() } -> std::same_as<std::coroutine_handle<Base>>;
 	};
 
 	template<class F, class ... TArgs>
@@ -29,6 +29,7 @@ namespace aoe::async::coroutine
 		class Impl;
 	public:
 		Pool();
+		~Pool();
 		Pool(const Pool &) = delete;
 		Pool(Pool &&) = delete;
 		Pool & operator=(const Pool &) = delete;
@@ -60,6 +61,6 @@ namespace aoe::async::coroutine
 
     private:
 		std::shared_ptr<Pool> lifetime_;
-	    std::unique_ptr<Impl> impl_;
+	    Impl * impl_ = nullptr;
     };
 }
