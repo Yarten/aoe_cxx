@@ -212,10 +212,6 @@ namespace aoe::async::coroutine
         class Awaiter
         {
         public:
-            explicit Awaiter(std::nullptr_t) noexcept
-            {
-            }
-
             explicit Awaiter(const std::coroutine_handle<Base> handle) noexcept
                 : handle_(handle)
             {

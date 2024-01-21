@@ -292,13 +292,22 @@ namespace aoe::async::coroutine::pipe_details
         public:
             [[nodiscard]] bool isReady() const
             {
+                bool has_opening_recv_sides = false;
+
                 for (const typename OneOneContext<T>::Sender & sender : viewRecvSidesSenders())
                 {
+                    has_opening_recv_sides = true;
+
                     if (sender.isReady())
                         return true;
                 }
 
                 // TODO: 若已经被挂起，然后被唤醒，可能会调用本函数检查是否真的 ready，针对这种情况，也许得检查是否是唯一唤醒
+
+                // If there are some opening receivers, but all of them are not ready,
+                // the sender will wait for any one of them to be ready.
+                if (has_opening_recv_sides)
+                    return false;
 
                 // The sender will hang and wait if there is still a possibility to create a new receiver.
                 return not self_.recv_id_creator_.hasNext();
@@ -456,6 +465,7 @@ namespace aoe::async::coroutine::pipe_details
 
             void onSuspend(const std::coroutine_handle<Base> handle)
             {
+                assert(recv_awaiter_.has_value());
                 recv_awaiter_->onSuspend(handle);
             }
 
@@ -466,7 +476,8 @@ namespace aoe::async::coroutine::pipe_details
 
             void onAbort()
             {
-                recv_awaiter_->onAbort();
+                if (recv_awaiter_.has_value())
+                    recv_awaiter_->onAbort();
             }
 
         private:

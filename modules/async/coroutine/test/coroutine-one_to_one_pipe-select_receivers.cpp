@@ -44,14 +44,9 @@ aoe::async::Go<> recvIntFunc(aoe::async::Pipe<int> ch)
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::cout << "recvIntFunc() " << std::this_thread::get_id() << std::endl;
 
-        const bool status = co_await (
-            ch >> [](int n)
-            {
-                std::cout << "recv int " << n << std::endl;
-            }
-        );
-
-        if (not status)
+        if (int n = 0; co_await(ch >> n))
+            std::cout << "recv int " << n << std::endl;
+        else
             break;
     }
 }
@@ -63,14 +58,9 @@ aoe::async::Go<> recvDoubleFunc(aoe::async::Pipe<double> ch)
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
         std::cout << "recvDoubleFunc() " << std::this_thread::get_id() << std::endl;
 
-        const bool status = co_await (
-            ch >> [](double n)
-            {
-                std::cout << "recv double " << n << std::endl;
-            }
-        );
-
-        if (not status)
+        if (double n = 0; co_await(ch >> n))
+            std::cout << "recv double " << n << std::endl;
+        else
             break;
     }
 }
@@ -82,14 +72,9 @@ aoe::async::Go<> recvStringFunc(aoe::async::Pipe<std::string> ch)
         std::this_thread::sleep_for(std::chrono::seconds(2));
         std::cout << "recvStringFunc() " << std::this_thread::get_id() << std::endl;
 
-        const bool status = co_await(
-            ch >> [](std::string s)
-            {
-                std::cout << "recv string " << s << std::endl;
-            }
-        );
-
-        if (not status)
+        if (std::string s; co_await(ch >> s))
+            std::cout << "recv string " << s << std::endl;
+        else
             break;
     }
 }

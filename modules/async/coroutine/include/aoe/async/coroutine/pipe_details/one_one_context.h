@@ -80,6 +80,11 @@ namespace aoe::async::coroutine::pipe_details
         std::atomic<std::coroutine_handle<Base>> awaiting_send_;
         std::atomic<std::coroutine_handle<Base>> awaiting_recv_;
 
+        // This flag is used when the buffer size is zero.
+        // It will be set to true when the receiver takes the data from the buffer,
+        // and to false when the sender is suspended.
+        std::atomic_bool send_is_awaked_once_ = false;
+
     public:
         class Sender
         {
@@ -141,13 +146,16 @@ namespace aoe::async::coroutine::pipe_details
 
             void onSuspend(const std::coroutine_handle<Base> handle)
             {
+                self_.awaiting_send_.store(handle, std::memory_order::release);
+
                 // when the buffer size is zero, it is the case that sender and receiver exchange data directly.
                 // when the sender is suspended to wait for the receiver, we should push the data to avoid that
                 // the receiver is also suspended because of the empty buffer.
                 if (self_.buffer_size_ == 0)
+                {
                     pushData();
-
-                self_.awaiting_send_.store(handle, std::memory_order::release);
+                    has_sent_the_data_ = true;
+                }
             }
 
             bool onResume()
@@ -157,10 +165,12 @@ namespace aoe::async::coroutine::pipe_details
                 if (self_.recv_closed_.load(std::memory_order::acquire))
                     return false;
 
-                if (self_.buffer_size_ != 0 or self_.buffer_.size_approx() == 0)
+                if (self_.buffer_size_ != 0 or not has_sent_the_data_)
+                {
                     pushData();
+                    awake(self_.pool_, self_.awaiting_recv_.exchange({}, std::memory_order::acquire));
+                }
 
-                awake(self_.pool_, self_.awaiting_recv_.exchange({}, std::memory_order::acquire));
                 return true;
             }
 
@@ -210,6 +220,10 @@ namespace aoe::async::coroutine::pipe_details
             OneOneContext & self_;
             std::variant<T, std::reference_wrapper<const T>> data_;
             Sender sender_;
+
+            // If the buffer size is zero, the data is sent when the sender is suspended,
+            // we should aovid to send it again when the sender is resumed.
+            bool has_sent_the_data_ = false;
         };
 
         class RecvAwaiter : public BoolAwaiter<RecvAwaiter>

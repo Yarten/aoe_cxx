@@ -31,7 +31,7 @@ namespace aoe::async::coroutine
             template <class F>
             RecvFuncAwaiter(Pipe& self, F&& func)
                 :
-                BoolAwaiter<RecvFuncAwaiter>(nullptr),
+                BoolAwaiter<RecvFuncAwaiter>(currentHandle()),
                 awaiter_(
                     self >> result_
                     & [this, func = std::forward<F>(func)]()
